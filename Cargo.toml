@@ -1,7 +1,17 @@
+[package]
+name = "multiplayer-fps"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
 [workspace]
 members = [
-    "client",
-    "server",
-    "shared",
+    ".",
+    "components/fps_audio",
+    "components/fps_core",
+    "components/fps_levels",
+    "components/fps_net",
+    "components/fps_render",
+    "components/fps_ui",
 ]
-resolver = "3"
