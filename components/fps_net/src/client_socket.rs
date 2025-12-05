@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
-use std::io::Result;
+use std::io::{Result, ErrorKind};
+
 use super::{NetSocket, Message, PingManager};
 
 /// ClientSocket represents a client connection to a server.
@@ -23,23 +24,6 @@ impl ClientSocket {
         })
     }
 
-    /// Send a message to the server
-    pub fn send(&mut self, msg: &Message) -> Result<usize> {
-        self.socket.send(self.server_addr, msg)
-    }
-
-    pub fn send_reliable(&mut self, msg: &Message) -> Result<usize> {
-        self.socket.send_reliable(self.server_addr, msg)
-    }
-
-    pub fn next_sequence(&mut self) -> u32 {
-        self.socket.next_sequence()
-    }
-
-    pub fn resend_pending(&mut self) -> Result<()> {
-        self.socket.resend_pending()
-    }
-
     /// Receive a message from any source
     pub fn recv(&mut self) -> Result<Option<Message>> {
        match self.socket.recv() {
@@ -51,8 +35,28 @@ impl ClientSocket {
                     Ok(None)  // Ignore if it's from any other source
                 }
             }
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                Ok(None)
+            }
             Err(e) => return Err(e), // timeout or would-block
         }
+    }
+
+    pub fn next_sequence(&mut self) -> u32 {
+        self.socket.next_sequence()
+    }
+
+    /// Send a message to the server
+    pub fn send(&mut self, msg: &Message) -> Result<usize> {
+        self.socket.send(self.server_addr, msg)
+    }
+
+    pub fn send_reliable(&mut self, msg: &Message) -> Result<usize> {
+        self.socket.send_reliable(self.server_addr, msg)
+    }
+
+    pub fn resend_pending(&mut self) -> Result<()> {
+        self.socket.resend_pending()
     }
 
     /// Send a ping and return the sequence number
@@ -66,6 +70,11 @@ impl ClientSocket {
     /// Handle a pong message and return RTT if available
     pub fn handle_pong(&mut self, seq: u32) -> Option<Duration> {
         self.ping_manager.handle_pong(seq, self.server_addr)
+    }
+
+    pub fn handle_ping(&self, seq: u32) -> Result<Message> {
+        let pong_msg = Message::new_pong(seq);
+        Ok(pong_msg)
     }
 
     /// Check for ping timeouts
@@ -112,6 +121,7 @@ mod tests {
                         }
                     }
                     Err(e) => {
+                        thread::sleep(Duration::from_millis(10));
                         eprintln!("Error receiving message: {}", e);
                     }
                 }
@@ -182,13 +192,19 @@ mod tests {
         assert!(sent_size > 0, "Reliable message was not sent properly");
 
         // Simulate receiving the message on the server side (mock server will handle this)
-        let received_msg = match client_socket.recv() {
-            Ok(Some(msg)) => msg,  // Success
-            Ok(None) => {
-                panic!("Expected a message from server but got None");
-            }
-            Err(e) => {
-                panic!("Error receiving message: {}", e);
+        let start = std::time::Instant::now();
+        let received_msg = loop {
+            match client_socket.recv() {
+                Ok(Some(msg)) => break msg,
+                Ok(None) => { /* ignore unexpected source */ }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    if start.elapsed() > Duration::from_secs(1) {
+                        panic!("Timed out waiting for ACK");
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
+                Err(e) => panic!("Unexpected recv error: {:?}", e),
             }
         };
 
@@ -197,12 +213,7 @@ mod tests {
         assert_eq!(received_msg.header.sequence, msg.header.sequence, "ACK should match the reliable message sequence");
 
         // Check ACK payload: it should contain the acknowledged sequence number
-        let ack_seq = received_msg.payload
-            .as_ref()
-            .expect("ACK must contain a payload")
-            .get(0)
-            .copied()
-            .expect("ACK payload must contain at least 1 byte") as u32;
+        let ack_seq = received_msg.decode_payload::<u32>().unwrap();
 
         assert_eq!(
             ack_seq,
@@ -220,25 +231,37 @@ mod tests {
         let client_socket = Arc::new(Mutex::new(ClientSocket::new(local_addr, server_addr, timeout).unwrap()));
         let server_addr = Arc::new("127.0.0.1:12345".parse::<SocketAddr>().unwrap());
 
-        // Start the mock server
+        // Start mock server
         mock_server(server_addr.clone(), client_socket.clone());
 
-        // Give the server time to start
         thread::sleep(Duration::from_millis(100));
 
         let mut client_socket = client_socket.lock().unwrap();
 
-        // Send a ping and wait for a pong
+        // Send ping
         let ping_seq = client_socket.send_ping().unwrap();
         println!("Sent ping with sequence: {}", ping_seq);
 
-        // Simulate receiving a pong
-        let rtt = client_socket.handle_pong(ping_seq);
+        // Wait for pong from server
+        let start = std::time::Instant::now();
+        let pong_msg = loop {
+            match client_socket.recv() {
+                Ok(Some(msg)) if msg.is_pong() => break msg,
+                Ok(_) => continue, // Ignore other packets
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    if start.elapsed() > Duration::from_secs(1) {
+                        panic!("Timed out waiting for pong");
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                Err(e) => panic!("recv error: {:?}", e),
+            }
+        };
 
-        // Verify that the RTT is not None (pong was received)
-        assert!(rtt.is_some(), "Failed to receive pong message");
-
-        println!("Round-trip time (RTT) is: {:?}", rtt.unwrap());
+        // Now handle pong
+        let rtt = client_socket.handle_pong(pong_msg.header.sequence);
+        println!("RTT: {:?}", rtt.unwrap());
+        assert!(rtt.is_some(), "Failed to compute RTT after receiving pong");
     }
 
     #[test]
@@ -268,5 +291,5 @@ mod tests {
         // Check for timeouts
         let timed_out_addrs = client_socket.check_ping_timeouts();
         assert!(timed_out_addrs.contains(&server_addr.as_ref()), "Timeout did not occur as expected");
-    }
+    } 
 }

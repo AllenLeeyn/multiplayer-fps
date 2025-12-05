@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::io::{Result};
+use std::time::Duration;
+use std::io::{Result, ErrorKind};
 
-use super::{NetSocket, Message, PingManager};
+use super::{NetSocket, Message, PingManager, now_ms};
 
 /// Represents a connected client
 pub struct ClientInfo {
@@ -31,24 +31,48 @@ impl ServerSocket {
     }
 
     /// Receive a message from any client
-    pub fn recv(&mut self) -> Result<(Message, SocketAddr)> {
-        let (msg, addr) = self.socket.recv()?;
+    pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>> {
+        match self.socket.recv() {
+            Ok((msg, addr)) => {
+                let entry = self.clients.entry(addr).or_insert(ClientInfo {
+                    last_seen: now_ms(),
+                });
+                entry.last_seen = now_ms();
+                Ok(Some((msg, addr)))
+            }
+            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
 
-        // Update last_seen or register new client
-        let entry = self.clients.entry(addr)
-            .or_insert_with(|| ClientInfo { last_seen: msg.header.timestamp_ms });
-        entry.last_seen = msg.header.timestamp_ms;
-
-        Ok((msg, addr))
+    pub fn next_sequence(&mut self) -> u32 {
+        self.socket.next_sequence()
     }
 
     /// Send a message to a specific client
     pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
         self.socket.send(addr, msg)
     }
-    
+
+    pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
+        self.socket.send_reliable(addr, msg)
+    }
+
     pub fn resend_pending(&mut self) -> Result<()> {
         self.socket.resend_pending()
+    }
+
+    /// Broadcast a message to all connected clients
+    pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>> {
+        let addrs: Vec<_> = self.clients.keys().copied().collect();
+        let mut failed = Vec::new();
+        for addr in addrs {
+            if let Err(e) = self.send(addr, msg) {
+                eprintln!("Failed to send to {}: {}", addr, e);
+                failed.push(addr);
+            }
+        }
+        Ok(failed)
     }
     
     /// Send a ping to a specific client and return the sequence number
@@ -64,37 +88,25 @@ impl ServerSocket {
         self.ping_manager.handle_pong(seq, addr)
     }
 
-    /// Broadcast a message to all connected clients
-    pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>> {
-      let clients = self.clients.keys().cloned().collect::<Vec<_>>();
-        let mut failed = Vec::new();
-
-        for addr in clients {
-            if let Err(e) = self.send(addr, msg) {
-                eprintln!("Failed to send to {}: {}", addr, e);
-                failed.push(addr);
-            }
-        }
-
-        Ok(failed)
+    pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message)> {
+        let pong_msg = Message::new_pong(seq);
+        Ok((addr, pong_msg))
     }
 
-    pub fn handle_ping(&mut self, addr: SocketAddr, seq: u32) -> Result<()> {
-        let pong_msg = Message::new_pong(seq);
-        self.send(addr, &pong_msg)?;
-        Ok(())
+    pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr> {
+        self.ping_manager.check_timeouts()
+    }
+
+    /// Get a list of currently connected clients
+    pub fn client_list(&self) -> Vec<SocketAddr> {
+        self.clients.keys().copied().collect()
     }
 
     /// Remove clients that have timed out based on last_seen
     pub fn remove_stale_clients(&mut self) -> Vec<SocketAddr> {
-        let now_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
-
+        let now_ms = now_ms();
         let mut removed = Vec::new();
 
-        // Retain clients whose last_seen is within the timeout
         self.clients.retain(|addr, info| {
             if now_ms.saturating_sub(info.last_seen) > self.timeout.as_millis() as u64 {
                 removed.push(*addr);
@@ -107,19 +119,6 @@ impl ServerSocket {
         removed
     }
 
-    pub fn next_sequence(&mut self) -> u32 {
-        self.socket.next_sequence()
-    }
-
-    /// Get a list of currently connected clients
-    pub fn client_list(&self) -> Vec<SocketAddr> {
-        self.clients.keys().cloned().collect()
-    }
-
-    pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr> {
-        self.ping_manager.check_timeouts()
-    }
-
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.socket.local_addr()
     }
@@ -129,8 +128,7 @@ impl ServerSocket {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::{ClientSocket, now_ms};
-    use std::sync::{Arc, Mutex};
+    use super::super::{ClientSocket};
     use std::thread;
     use std::time::Duration;
     use std::net::SocketAddr;
@@ -138,14 +136,13 @@ mod tests {
     #[test]
     fn test_server_socket_creation() {
         let timeout = Duration::from_secs(2);
-        let local_addr = "127.0.0.1:0"; // Use a dynamically assigned local port
+        let local_addr = "127.0.0.1:0"; // dynamically assigned port
 
-        // Create ServerSocket
         let server_socket = ServerSocket::bind(local_addr, timeout).unwrap();
 
-        // Ensure that the server is listening on the dynamically assigned address
-        println!("Server is bound to: {:?}", server_socket.socket.local_addr().unwrap());
-        assert!(server_socket.socket.local_addr().unwrap().port() > 0);
+        let local_addr = server_socket.local_addr().unwrap();
+        println!("Server is bound to: {:?}", local_addr);
+        assert!(local_addr.port() > 0);
     }
 
     #[test]
@@ -154,100 +151,115 @@ mod tests {
         let server_addr = "127.0.0.1:8081";
         let client_addr = "127.0.0.1:8082";
 
-        let server_socket = Arc::new(Mutex::new(
-            ServerSocket::bind(server_addr, timeout).unwrap()
-        ));
+        let mut server_socket = ServerSocket::bind(
+            server_addr, timeout).unwrap();
+        let mut client_socket = ClientSocket::new(
+            client_addr, server_addr, timeout).unwrap();
+        let client_addr_parsed: SocketAddr = client_addr.parse().unwrap();
 
-        let client_socket = Arc::new(Mutex::new(
-            ClientSocket::new(client_addr, server_addr, timeout).unwrap()
-        ));
+        // Send ping from client
+        let msg = Message::new_ping(1);
+        client_socket.send(&msg).unwrap();
 
-        // Start server thread
-        let server_socket_clone = server_socket.clone();
-        let handle = thread::spawn(move || {
-            let mut server_socket = server_socket_clone.lock().unwrap();
-            let (msg, src) = server_socket.recv().unwrap();
-
-            assert_eq!(src, client_addr.parse::<SocketAddr>().unwrap());
-
-            // This SHOULD FAIL because msg is Ping
-            assert!(msg.is_ping(), "Expected a ping message");
-        });
-
-        // Send ping
-        {
-            let mut client_socket = client_socket.lock().unwrap();
-            let msg = Message::new_ping(1);
-            client_socket.send(&msg).unwrap();
+        // Poll server for message
+        let mut received = None;
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            if let Some((msg, src)) = server_socket.recv().unwrap() {
+                received = Some((msg, src));
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
         }
 
-        // Wait for server thread and propagate failure
-        handle.join().unwrap();
+        let (msg, src) = received.expect("Did not receive any message in time");
 
-        thread::sleep(Duration::from_millis(100));
+        assert_eq!(src, client_addr_parsed);
+        assert!(msg.is_ping(), "Expected a ping message");
     }
 
-    /// Test sending a message to a client
     #[test]
     fn test_send_message() {
         let timeout = Duration::from_secs(2);
-        let server_addr = "127.0.0.1:0";
-        let client_addr = "127.0.0.1:0";
-
-        let mut server = ServerSocket::bind(server_addr, timeout).unwrap();
+        let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
         let real_server_addr = server.local_addr().unwrap();
 
-        let client_socket = super::super::ClientSocket::new(
-            client_addr, &real_server_addr.to_string(), timeout).unwrap();
+        let mut client_socket = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
         let client_real_addr = client_socket.local_addr().unwrap();
 
         let msg = Message::new_ping(1);
         let sent_bytes = server.send(client_real_addr, &msg).unwrap();
         assert!(sent_bytes > 0, "Server failed to send message");
+
+        // Check that client received the message
+        let mut received = None;
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(2) {
+            if let Some(msg) = client_socket.recv().unwrap() {
+                received = Some(msg);
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        let received = received.expect("Client did not receive message");
+        assert!(received.is_ping());
     }
 
-    /// Test broadcasting to multiple clients
     #[test]
     fn test_broadcast_message() {
         let timeout = Duration::from_secs(2);
-        let server_addr = "127.0.0.1:0";
+        let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
+        let real_server_addr = server.local_addr().unwrap();
 
-        let mut server = ServerSocket::bind(server_addr, timeout).unwrap();
-        let real_server_addr = server.socket.local_addr().unwrap();
+        let client1 = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
+        let client2 = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
 
-        // Create two mock clients
-        let client1 = super::super::ClientSocket::new(
-            "127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
-        let client2 = super::super::ClientSocket::new(
-            "127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
+        // Register clients manually
+        server.clients.insert(client1.local_addr().unwrap(), ClientInfo { last_seen: 0 });
+        server.clients.insert(client2.local_addr().unwrap(), ClientInfo { last_seen: 0 });
 
         let msg = Message::new_ping(1);
 
-        // Register clients manually in server for testing broadcast
-        server.clients.insert(client1.local_addr().unwrap(), super::ClientInfo { last_seen: 0 });
-        server.clients.insert(client2.local_addr().unwrap(), super::ClientInfo { last_seen: 0 });
-
-        // Spawn threads to receive on clients
+        // Spawn threads to receive messages
         let c1 = thread::spawn({
             let mut client1 = client1;
+            let msg_type = msg.header.msg_type;
             move || {
-                let received = client1.recv().unwrap().unwrap();
-                assert_eq!(received.header.msg_type, msg.header.msg_type);
+                let mut received = None;
+                let start = std::time::Instant::now();
+                while start.elapsed() < Duration::from_secs(1) {
+                    if let Some(msg) = client1.recv().unwrap() {
+                        received = Some(msg);
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                let received = received.expect("Client1 did not receive any message in time");
+                assert_eq!(received.header.msg_type, msg_type);
             }
         });
 
         let c2 = thread::spawn({
             let mut client2 = client2;
+            let msg_type = msg.header.msg_type;
             move || {
-                let received = client2.recv().unwrap().unwrap();
-                assert_eq!(received.header.msg_type, msg.header.msg_type);
+                let mut received = None;
+                let start = std::time::Instant::now();
+                while start.elapsed() < Duration::from_secs(1) {
+                    if let Some(msg) = client2.recv().unwrap() {
+                        received = Some(msg);
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(5));
+                }
+                let received = received.expect("Client2 did not receive any message in time");
+                assert_eq!(received.header.msg_type, msg_type);
             }
         });
 
-        // Broadcast the message
+        // Broadcast message
         server.broadcast(&msg).unwrap();
 
-        // Wait for clients to receive
         c1.join().unwrap();
         c2.join().unwrap();
     }
@@ -255,32 +267,16 @@ mod tests {
     #[test]
     fn test_remove_stale_clients() {
         let timeout = Duration::from_secs(1);
-        let server_addr = "127.0.0.1:0";
+        let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
 
-        // Create server
-        let mut server = ServerSocket::bind(server_addr, timeout).unwrap();
-
-        // Simulate a client sending a message to register it
         let client_addr = "127.0.0.1:12345".parse().unwrap();
-
-        // Manually update last_seen for testing
         server.clients.insert(client_addr, ClientInfo { last_seen: now_ms() });
 
-        // Ensure client is in the list
-        assert_eq!(server.clients.len(), 1);
-
-        // Wait longer than the timeout
         std::thread::sleep(Duration::from_secs(2));
 
-        // Remove stale clients
         let removed = server.remove_stale_clients();
-
-        // Client should have been removed
         assert_eq!(removed.len(), 1, "Stale client was not removed");
         assert_eq!(removed[0], client_addr, "Incorrect client was removed");
-
-        // Clients list should now be empty
         assert!(server.clients.is_empty());
     }
-
 }

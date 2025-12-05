@@ -200,47 +200,6 @@ Computer-controlled players can participate in games
         *   State Updates: The client's net crate will receive game state snapshots from the server at 30 Hz.
         *   Prediction & Interpolation: The client's core crate will use these server snapshots, combined with client-side prediction and interpolation techniques, to smoothly render the game world at 60 FPS (via render crate) and update the UI (via ui crate). This involves predicting future states based on local input and inte
 
-- Program flow
-
-```mermaid
-graph TD
-    A[Start Application] --> B{Main Menu / Mode Selection}
-
-    B --> C1[Host Game]
-    C1 --> D1[Server Initialization]
-    D1 --> E1[Client Initialization]
-    E1 --> F1[Client Connects to Local Server]
-    F1 --> G[Game Loop - Client & Server Interaction]
-
-    B --> C2[Join Game]
-    C2 --> D2[Client Initialization]
-    D2 --> E2[Prompt for Server IP/Port & Username]
-    E2 --> F2[Client Connects to Remote Server]
-    F2 --> G
-
-    B --> C3[Level Editor]
-    C3 --> D3[Level Editor UI]
-    D3 --> E3[Design / Save / Load Maze]
-    E3 --> B
-
-    G --> H{Client-Server Interaction}
-    H --> I[Client: User Input - ui]
-    I --> J[Client: Send Input - net]
-    J --> K[Server: Receive Input - net]
-    K --> L[Server: Update Game State - core]
-    L --> M[Server: Send State Updates - net]
-    M --> N[Client: Receive State Updates - net]
-    N --> O[Client: Update Local State / Prediction -core]
-    O --> P[Client: Render Game World -render]
-    P --> Q[Client: Display UI - ui]
-    Q --> H
-
-    G --> R{Game End Condition Met?}
-    R -- Yes --> S[Display Final Leaderboard]
-    S --> B
-    R -- No --> G
-```
-
 ## Project Structure
 ```
 multiplayer_fps/
@@ -327,7 +286,8 @@ multiplayer_fps/
 │   │   │   │           attempts: u32,
 │   │   │   │       }
 │   │   │   │   •   pub struct NetSocket {
-│   │   │   │           socket: UdpSocket,
+│   │   │   │           recv_socket: UdpSocket,
+│   │   │   │           send_socket: UdpSocket,
 │   │   │   │           sequence: u32,
 │   │   │   │           recv_buffer: Vec<u8>,
 │   │   │   │           pub timeout: Duration,
@@ -335,10 +295,10 @@ multiplayer_fps/
 │   │   │   │       }
 │   │   │   │   •   impl NetSocket {
 │   │   │   │           pub fn bind(addr: &str, timeout: Duration) -> Result<Self>
-│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
 │   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr)>
 │   │   │   │           pub fn next_sequence(&mut self) -> u32
+│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
+│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
 │   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
 │   │   │   │           pub fn set_timeout(&self, timeout: Duration) -> Result<()>
 │   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
@@ -352,12 +312,14 @@ multiplayer_fps/
 │   │   │   │       }
 │   │   │   │   •   impl ClientSocket {
 │   │   │   │           pub fn new(local_addr: &str, server_addr: &str, ping_timeout: Duration) -> Result<Self>
+│   │   │   │           pub fn recv(&mut self) -> Result<Option<Message>>
+│   │   │   │           pub fn next_sequence(&mut self) -> u32
 │   │   │   │           pub fn send(&mut self, msg: &Message) -> Result<usize> 
 │   │   │   │           pub fn send_reliable(&mut self, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn next_sequence(&mut self) -> u32
 │   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
 │   │   │   │           pub fn send_ping(&mut self) -> Result<u32>
 │   │   │   │           pub fn handle_pong(&mut self, seq: u32) -> Option<Duration>
+│   │   │   │           pub fn handle_ping(&self, seq: u32) -> Result<Message>
 │   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<u32>
 │   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
 │   │   │   │       }
@@ -367,24 +329,25 @@ multiplayer_fps/
 │   │   │   │           pub last_seen: u64,
 │   │   │   │       }
 │   │   │   │   •   pub struct ServerSocket {
-│   │   │   │           socket: NetSocket,
-│   │   │   │           clients: HashMap<SocketAddr, ClientInfo>,
-│   │   │   │           ping_manager: PingManager,
+│   │   │   │           socket: Arc<Mutex<NetSocket>>,
+│   │   │   │           clients: Arc<RwLock<HashMap<SocketAddr, ClientInfo>>>,
+│   │   │   │           ping_manager: Arc<Mutex<PingManager>>,
 │   │   │   │           timeout: Duration,
 │   │   │   │       }
 │   │   │   │   •   impl ServerSocket {
 │   │   │   │           pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self>
 │   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr)> 
+│   │   │   │           pub fn next_sequence(&mut self) -> u32
 │   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
+│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
 │   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
+│   │   │   │           pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>>
 │   │   │   │           pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32>
 │   │   │   │           pub fn handle_pong(&mut self, addr: SocketAddr, seq: u32) -> Option<Duration>
-│   │   │   │           pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>>
-│   │   │   │           pub fn handle_ping(&mut self, addr: SocketAddr, seq: u32) -> Result<()> 
-│   │   │   │           pub fn remove_stale_clients(&mut self) -> Vec<SocketAddr>
-│   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn client_list(&self) -> Vec<SocketAddr>
+│   │   │   │           pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message)>
 │   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<u32>
+│   │   │   │           pub fn client_list(&self) -> Vec<SocketAddr>
+│   │   │   │           pub fn remove_stale_clients(&mut self) -> Vec<SocketAddr>
 │   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
 │   │   │   │       }
 │   │   │   │

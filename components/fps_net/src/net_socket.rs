@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::net::{UdpSocket, SocketAddr};
 use std::time::{Duration, Instant};
 use std::io::{Error, ErrorKind, Result};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use super::Message;
 
@@ -14,8 +15,9 @@ struct ReliableEntry {
 
 // handle reliable
 pub struct NetSocket {
-    socket: UdpSocket,
-    sequence: u32,
+    recv_socket: UdpSocket,
+    send_socket: UdpSocket,
+    sequence: AtomicU32,
     recv_buffer: Vec<u8>,
     pub timeout: Duration,
     reliable_queue: HashMap<u32, ReliableEntry>,
@@ -24,49 +26,30 @@ pub struct NetSocket {
 impl NetSocket {
     /// Create a new NetSocket bound to the given address
     pub fn bind(addr: &str, timeout: Duration) -> Result<Self> {
-        let socket = UdpSocket::bind(addr)?;
-        socket.set_read_timeout(Some(timeout))?;
+        let recv_socket = UdpSocket::bind(addr)?;
+        recv_socket.set_nonblocking(true)?;
+
+        let send_socket = recv_socket.try_clone()?; 
         Ok(Self {
-            socket,
-            sequence: 0,
+            recv_socket,
+            send_socket,
+            sequence: 0.into(),
             recv_buffer: vec![0u8; 65536], // max UDP size
             timeout,
             reliable_queue: HashMap::new(),
         })
     }
-
-    /// Send a message to a given address
-    pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
-        let bytes = msg.encode()
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-        self.socket.send_to(&bytes, addr)
-    }
-
-    pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
-        let sent = self.send(addr, msg)?;
-
-        // Track reliable messages
-        self.reliable_queue.insert(msg.header.sequence, ReliableEntry {
-            msg: msg.clone(),
-            addr,
-            last_sent: Instant::now(),
-            attempts: 1,
-        });
-
-        Ok(sent)
-    }
     
     /// Receive a message from the socket
     pub fn recv(&mut self) -> Result<(Message, SocketAddr)> {
-        match self.socket.recv_from(&mut self.recv_buffer) {
+        match self.recv_socket.recv_from(&mut self.recv_buffer) {
             Ok((size, src)) => {
                 let msg = Message::decode(&self.recv_buffer[..size])
                     .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-                
-                // If it's an ack, remove from reliable queue
+
                 if msg.is_ack() {
-                    if let Ok(acked_seq) = msg.decode_payload::<u32>() {
-                        self.reliable_queue.remove(&acked_seq);
+                    if let Ok(seq) = msg.decode_payload::<u32>() {
+                        self.reliable_queue.remove(&seq);
                     }
                 }
 
@@ -81,18 +64,41 @@ impl NetSocket {
 
     /// Generate the next sequence number
     pub fn next_sequence(&mut self) -> u32 {
-        let seq = self.sequence;
-        self.sequence = self.sequence.wrapping_add(1);
-        seq
+        self.sequence.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Send a message to a given address
+    pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
+        let bytes = msg.encode()
+            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
+        self.send_socket.send_to(&bytes, addr)
+    }
+
+
+    pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
+        let sent = self.send(addr, msg)?;
+        self.reliable_queue.insert(
+            msg.header.sequence,
+            ReliableEntry {
+                msg: msg.clone(),
+                addr,
+                last_sent: Instant::now(),
+                attempts: 1,
+            },
+        );
+        Ok(sent)
     }
 
     pub fn resend_pending(&mut self) -> Result<()> {
         let now = Instant::now();
+
         for entry in self.reliable_queue.values_mut() {
-            if now.duration_since(entry.last_sent) > self.timeout {
+            if now.duration_since(entry.last_sent) >= self.timeout {
                 let bytes = entry.msg.encode()
                     .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?;
-                self.socket.send_to(&bytes, entry.addr)?;
+                
+                self.send_socket.send_to(&bytes, entry.addr)?;
+
                 entry.last_sent = now;
                 entry.attempts += 1;
             }
@@ -102,12 +108,12 @@ impl NetSocket {
 
     /// Set read timeout
     pub fn set_timeout(&self, timeout: Duration) -> Result<()> {
-        self.socket.set_read_timeout(Some(timeout))
+        self.send_socket.set_read_timeout(Some(timeout))
     }
 
     /// Get local socket address
     pub fn local_addr(&self) -> Result<SocketAddr> {
-        self.socket.local_addr()
+        self.send_socket.local_addr()
     }
 }
 
@@ -144,7 +150,9 @@ mod tests {
         assert!(result.is_ok(), "Failed to send reliable message");
 
         // Check if the message was added to the reliable queue
-        let reliable_entry = net_socket.reliable_queue.get(&msg.header.sequence);
+        let queue = net_socket.reliable_queue;
+        let reliable_entry = queue.get(&msg.header.sequence);
+    
         assert!(reliable_entry.is_some(), "Message not added to reliable queue");
         assert_eq!(reliable_entry.unwrap().msg, msg, "Message in queue does not match sent message");
     }
@@ -171,6 +179,7 @@ mod tests {
         // Send the message from sender_socket
         let sent_size = sender_socket.send(receiver_addr, &msg).unwrap();
         println!("Sent message of size: {}", sent_size);
+        thread::sleep(Duration::from_millis(30));
 
         // Now simulate receiving the message on receiver_socket
         let (received_msg, src) = receiver_socket.recv().unwrap();
@@ -208,7 +217,7 @@ mod tests {
         println!("Sent message of size: {}", sent_size);
 
         // Add a small delay to ensure the receiver has time to process the message
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(30));
 
         // Now simulate receiving the message on receiver_socket
         let (received_msg, src) = receiver_socket.recv().unwrap();
@@ -254,7 +263,9 @@ mod tests {
         assert!(result.is_ok(), "Failed to resend pending messages");
 
         // Check that the message was resent
-        let reliable_entry = net_socket.reliable_queue.get(&msg.header.sequence);
+        let queue = net_socket.reliable_queue;
+        let reliable_entry = queue.get(&msg.header.sequence);
+
         assert!(reliable_entry.is_some(), "Message not found in reliable queue after retry");
         assert!(reliable_entry.unwrap().attempts > 1, "Message not retried after timeout");
     }
