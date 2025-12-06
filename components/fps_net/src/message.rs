@@ -1,15 +1,14 @@
-use serde::{Serialize, Deserialize};
-use bincode::serde::{encode_to_vec, decode_from_slice};
 use bincode::config::standard;
+use bincode::serde::{decode_from_slice, encode_to_vec};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-use super::{MessageHeader, MessageType};
-use super::now_ms; 
+use super::{MessageHeader, MessageType, now_ms};
 
 /// Function that serializes any payload of type T into Vec<u8>
 pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Error>> {
-    let config = standard();
-    Ok(encode_to_vec(payload, config)?)
+    encode_to_vec(payload, standard())
+        .map_err(|e| format!("Failed to encode payload: {}", e).into())
 }
 
 /// Generic network message
@@ -55,9 +54,14 @@ impl Message {
                         Ok(decoded) // Successfully decoded
                     } else {
                         // If the sizes don't match, return an error
-                        Err(format!("Payload size mismatch: expected {} bytes, but decoded {} bytes", payload.len(), size).into())
+                        Err(format!(
+                            "Payload size mismatch: expected {} bytes, but decoded {} bytes",
+                            payload.len(),
+                            size
+                        )
+                        .into())
                     }
-                },
+                }
                 Err(e) => Err(Box::new(e)),
             }
         } else {
@@ -77,9 +81,8 @@ impl Message {
         Self::new(MessageType::Pong, sequence, None)
     }
 
-    pub fn new_connect_request(sequence: u32, username: &str) -> Self {
-        let payload = encode_to_vec(&username, standard()).ok();
-        Self::new(MessageType::ConnectRequest, sequence, payload)
+    pub fn new_connect_request(sequence: u32) -> Self {
+        Self::new(MessageType::ConnectRequest, sequence, None)
     }
 
     pub fn new_connect_accept(sequence: u32) -> Self {
@@ -87,8 +90,9 @@ impl Message {
     }
 
     pub fn new_connect_deny(sequence: u32, reason: &str) -> Self {
-        let payload = encode_to_vec(&reason, standard()).ok();
-        Self::new(MessageType::ConnectDeny, sequence, payload)
+        let payload = encode_to_vec(&reason, standard())
+            .expect("Encoding connect_deny payload should never fail");
+        Self::new(MessageType::ConnectDeny, sequence, Some(payload))
     }
 
     pub fn new_disconnect_notice(sequence: u32) -> Self {
@@ -96,18 +100,21 @@ impl Message {
     }
 
     pub fn new_reliable<T: Serialize>(sequence: u32, payload_obj: &T) -> Self {
-        let payload = encode_to_vec(payload_obj, standard()).ok();
-        Self::new(MessageType::Reliable, sequence, payload)
+        let payload = encode_to_vec(&payload_obj, standard())
+            .expect("Encoding reliable payload should never fail");
+        Self::new(MessageType::Reliable, sequence, Some(payload))
     }
 
     pub fn new_unreliable<T: Serialize>(sequence: u32, payload_obj: &T) -> Self {
-        let payload = encode_to_vec(payload_obj, standard()).ok();
-        Self::new(MessageType::Unreliable, sequence, payload)
+        let payload = encode_to_vec(&payload_obj, standard())
+            .expect("Encoding unreliable payload should never fail");
+        Self::new(MessageType::Unreliable, sequence, Some(payload))
     }
 
     pub fn new_ack(sequence: u32, acked_sequence: u32) -> Self {
-        let payload = encode_to_vec(&acked_sequence, standard()).ok();
-        Self::new(MessageType::Acknowledgement, sequence, payload)
+        let payload = encode_to_vec(&acked_sequence, standard())
+            .expect("Encoding ask payload should never fail");
+        Self::new(MessageType::Acknowledgement, sequence, Some(payload))
     }
 
     // --------------------------------------------------
@@ -154,8 +161,8 @@ impl Message {
 #[cfg(test)]
 mod tests {
     use super::{Message, MessageType};
+    use serde::{Deserialize, Serialize};
     use std::error::Error;
-    use serde::{Serialize, Deserialize};
 
     // Example struct to use as payload for testing
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -167,7 +174,7 @@ mod tests {
     // Test encoding and decoding of the Message
     #[test]
     fn test_message_encoding_decoding() -> Result<(), Box<dyn Error>> {
-        let  payload = TestPayload {
+        let payload = TestPayload {
             text: "Hello, world!".to_string(),
             number: 42,
         };
@@ -242,7 +249,7 @@ mod tests {
         // Try to decode the payload as a completely different struct
         #[derive(Serialize, Deserialize, Debug)]
         struct InvalidPayload {
-            invalid_field: u32,  // `u32` is incompatible with the payload which is a string
+            invalid_field: u32, // `u32` is incompatible with the payload which is a string
         }
 
         // Attempt to decode the payload into InvalidPayload
@@ -251,7 +258,10 @@ mod tests {
         println!("{:?}", result);
 
         // Assert that decoding the invalid payload fails
-        assert!(result.is_err(), "Expected error while decoding invalid payload");
+        assert!(
+            result.is_err(),
+            "Expected error while decoding invalid payload"
+        );
 
         // Optionally, check the error type to ensure it's a deserialization error
         if let Err(e) = result {

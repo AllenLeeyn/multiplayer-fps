@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 use std::net::SocketAddr;
+use std::time::{Duration, Instant};
 
 /// Represents a ping currently in-flight, tied to a specific client address
 struct PingEntry {
@@ -10,9 +10,9 @@ struct PingEntry {
 
 /// Manages ping/pong messages for multiple clients
 pub struct PingManager {
-    next_sequence: u32,                          // Sequence for pings
-    pending_pings: HashMap<u32, PingEntry>,      // Maps sequence to PingEntry
-    timeout: Duration,                           // Max allowed time for a ping
+    next_sequence: u32,                     // Sequence for pings
+    pending_pings: HashMap<u32, PingEntry>, // Maps sequence to PingEntry
+    timeout: Duration,                      // Max allowed time for a ping
 }
 
 impl PingManager {
@@ -30,10 +30,13 @@ impl PingManager {
         let seq = self.next_sequence;
         self.next_sequence = self.next_sequence.wrapping_add(1); // wrap-around safe
 
-        self.pending_pings.insert(seq, PingEntry {
-            timestamp: Instant::now(),
-            addr,
-        });
+        self.pending_pings.insert(
+            seq,
+            PingEntry {
+                timestamp: Instant::now(),
+                addr,
+            },
+        );
 
         seq
     }
@@ -55,11 +58,10 @@ impl PingManager {
 
     /// Check for timed-out pings and remove them, returns a list of addresses with timeouts
     pub fn check_timeouts(&mut self) -> Vec<SocketAddr> {
-        let now = Instant::now();
         let mut timed_out_addrs = Vec::new();
 
         self.pending_pings.retain(|_seq, entry| {
-            if now.duration_since(entry.timestamp) > self.timeout {
+            if entry.timestamp.elapsed() > self.timeout {
                 timed_out_addrs.push(entry.addr); // Track client address with timeout
                 false
             } else {
@@ -74,9 +76,9 @@ impl PingManager {
 #[cfg(test)]
 mod tests {
     use super::*; // Assuming PingManager and dependencies are in the same module
-    use std::time::Duration;
     use std::net::SocketAddr;
     use std::str::FromStr;
+    use std::time::Duration;
 
     // Helper function to create a dummy address for testing
     fn create_test_address() -> SocketAddr {
@@ -140,7 +142,7 @@ mod tests {
 
         let addr1 = create_test_address();
         let addr2 = SocketAddr::from_str("127.0.0.1:54321").unwrap();
-        
+
         // Create a ping for each address
         ping_manager.create_ping(addr1);
         ping_manager.create_ping(addr2);

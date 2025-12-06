@@ -1,9 +1,9 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::net::SocketAddr;
 use std::time::Duration;
-use std::io::{Result, ErrorKind};
 
-use super::{NetSocket, Message, PingManager, now_ms};
+use super::{Message, NetSocket, PingManager, now_ms};
 
 /// Represents a connected client
 pub struct ClientInfo {
@@ -20,7 +20,7 @@ pub struct ServerSocket {
 
 impl ServerSocket {
     /// Bind to a local address to accept clients
-    pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self> {
+    pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self, Box<dyn Error>> {
         let socket = NetSocket::bind(local_addr, timeout)?;
         Ok(Self {
             socket,
@@ -31,7 +31,7 @@ impl ServerSocket {
     }
 
     /// Receive a message from any client
-    pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>> {
+    pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>, Box<dyn Error>> {
         match self.socket.recv() {
             Ok((msg, addr)) => {
                 let entry = self.clients.entry(addr).or_insert(ClientInfo {
@@ -40,7 +40,6 @@ impl ServerSocket {
                 entry.last_seen = now_ms();
                 Ok(Some((msg, addr)))
             }
-            Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -50,20 +49,24 @@ impl ServerSocket {
     }
 
     /// Send a message to a specific client
-    pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
+    pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>> {
         self.socket.send(addr, msg)
     }
 
-    pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize> {
+    pub fn send_reliable(
+        &mut self,
+        addr: SocketAddr,
+        msg: &Message,
+    ) -> Result<usize, Box<dyn Error>> {
         self.socket.send_reliable(addr, msg)
     }
 
-    pub fn resend_pending(&mut self) -> Result<()> {
+    pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)> {
         self.socket.resend_pending()
     }
 
     /// Broadcast a message to all connected clients
-    pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>> {
+    pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>> {
         let addrs: Vec<_> = self.clients.keys().copied().collect();
         let mut failed = Vec::new();
         for addr in addrs {
@@ -74,9 +77,9 @@ impl ServerSocket {
         }
         Ok(failed)
     }
-    
+
     /// Send a ping to a specific client and return the sequence number
-    pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32> {
+    pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32, Box<dyn Error>> {
         let seq = self.ping_manager.create_ping(addr);
         let ping_msg = Message::new_ping(seq);
         self.send(addr, &ping_msg)?;
@@ -88,7 +91,11 @@ impl ServerSocket {
         self.ping_manager.handle_pong(seq, addr)
     }
 
-    pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message)> {
+    pub fn handle_ping(
+        &self,
+        addr: SocketAddr,
+        seq: u32,
+    ) -> Result<(SocketAddr, Message), Box<dyn Error>> {
         let pong_msg = Message::new_pong(seq);
         Ok((addr, pong_msg))
     }
@@ -119,19 +126,18 @@ impl ServerSocket {
         removed
     }
 
-    pub fn local_addr(&self) -> Result<SocketAddr> {
+    pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>> {
         self.socket.local_addr()
     }
-
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::ClientSocket;
     use super::*;
-    use super::super::{ClientSocket};
+    use std::net::SocketAddr;
     use std::thread;
     use std::time::Duration;
-    use std::net::SocketAddr;
 
     #[test]
     fn test_server_socket_creation() {
@@ -151,10 +157,8 @@ mod tests {
         let server_addr = "127.0.0.1:8081";
         let client_addr = "127.0.0.1:8082";
 
-        let mut server_socket = ServerSocket::bind(
-            server_addr, timeout).unwrap();
-        let mut client_socket = ClientSocket::new(
-            client_addr, server_addr, timeout).unwrap();
+        let mut server_socket = ServerSocket::bind(server_addr, timeout).unwrap();
+        let mut client_socket = ClientSocket::new(client_addr, server_addr, timeout).unwrap();
         let client_addr_parsed: SocketAddr = client_addr.parse().unwrap();
 
         // Send ping from client
@@ -184,7 +188,8 @@ mod tests {
         let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
         let real_server_addr = server.local_addr().unwrap();
 
-        let mut client_socket = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
+        let mut client_socket =
+            ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
         let client_real_addr = client_socket.local_addr().unwrap();
 
         let msg = Message::new_ping(1);
@@ -211,12 +216,18 @@ mod tests {
         let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
         let real_server_addr = server.local_addr().unwrap();
 
-        let client1 = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
-        let client2 = ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
+        let client1 =
+            ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
+        let client2 =
+            ClientSocket::new("127.0.0.1:0", &real_server_addr.to_string(), timeout).unwrap();
 
         // Register clients manually
-        server.clients.insert(client1.local_addr().unwrap(), ClientInfo { last_seen: 0 });
-        server.clients.insert(client2.local_addr().unwrap(), ClientInfo { last_seen: 0 });
+        server
+            .clients
+            .insert(client1.local_addr().unwrap(), ClientInfo { last_seen: 0 });
+        server
+            .clients
+            .insert(client2.local_addr().unwrap(), ClientInfo { last_seen: 0 });
 
         let msg = Message::new_ping(1);
 
@@ -228,9 +239,15 @@ mod tests {
                 let mut received = None;
                 let start = std::time::Instant::now();
                 while start.elapsed() < Duration::from_secs(1) {
-                    if let Some(msg) = client1.recv().unwrap() {
-                        received = Some(msg);
-                        break;
+                    match client1.recv() {
+                        Ok(Some(msg)) => {
+                            received = Some(msg);
+                            break;
+                        }
+                        Ok(None) => { /* ignore messages from other sources */ }
+                        Err(_) => {
+                            // Ignore errors (like WouldBlock) and retry
+                        }
                     }
                     thread::sleep(Duration::from_millis(5));
                 }
@@ -246,9 +263,15 @@ mod tests {
                 let mut received = None;
                 let start = std::time::Instant::now();
                 while start.elapsed() < Duration::from_secs(1) {
-                    if let Some(msg) = client2.recv().unwrap() {
-                        received = Some(msg);
-                        break;
+                    match client2.recv() {
+                        Ok(Some(msg)) => {
+                            received = Some(msg);
+                            break;
+                        }
+                        Ok(None) => { /* ignore messages from other sources */ }
+                        Err(_) => {
+                            // Ignore errors (like WouldBlock) and retry
+                        }
                     }
                     thread::sleep(Duration::from_millis(5));
                 }
@@ -270,7 +293,12 @@ mod tests {
         let mut server = ServerSocket::bind("127.0.0.1:0", timeout).unwrap();
 
         let client_addr = "127.0.0.1:12345".parse().unwrap();
-        server.clients.insert(client_addr, ClientInfo { last_seen: now_ms() });
+        server.clients.insert(
+            client_addr,
+            ClientInfo {
+                last_seen: now_ms(),
+            },
+        );
 
         std::thread::sleep(Duration::from_secs(2));
 
