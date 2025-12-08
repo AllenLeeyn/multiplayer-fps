@@ -1,31 +1,14 @@
-use crate::context::UIMainContext;
-use crate::events::{ComponentUpdate, UIEvent};
-use winit::event::WindowEvent;
-use winit::window::Window;
+use std::fmt::Debug;
+use crate::geometry::Bounds;
+
+// --- Abstract Types ---
+use super::super::{UIMainContext, ComponentUpdate, UIEvent, UIInputEvent}; // Use abstract input
 
 /// Defines the mandatory contract for all UI elements.
-pub trait Component: Send + Sync {
+pub trait Component: Send + Sync + Debug {
     fn id(&self) -> &str;
-    fn handle_input(&mut self, event: &WindowEvent, window: &Window) -> Vec<UIEvent>;
-    fn draw(&self, frame: &mut [u8], context: &UIMainContext);
-    fn apply_update(&mut self, update: &ComponentUpdate);
-}
-
-/// Simple struct for defining a rectangular boundary in screen coordinates.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Bounds {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
-
-impl Bounds {
-    /// Checks if a given coordinate (e.g., mouse position) falls within these bounds.
-    pub fn contains(&self, px: f64, py: f64) -> bool {
-        px >= self.x as f64
-            && py >= self.y as f64
-            && px < (self.x + self.width) as f64
-            && py < (self.y + self.height) as f64
-    }
+    fn bounds(&self) -> Bounds;
+    fn handle_input(&mut self, event: &UIInputEvent) -> Vec<UIEvent>;
+    fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32);
+    fn apply_update(&mut self, update: &ComponentUpdate) -> bool;
 }

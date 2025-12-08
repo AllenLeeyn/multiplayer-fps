@@ -1,33 +1,40 @@
 use super::font::FontManager;
-use std::path::Path; // Import the FontManager from the sibling module
+use std::{collections::HashMap, path::Path};
 
 /// UIMainContext holds application-wide, mostly static resources
 /// that are required by the UIManager and individual components for rendering.
-///
-/// This acts as the read-only global state container.
 #[derive(Debug)]
 pub struct UIMainContext {
-    /// Manages the single loaded font asset. Guaranteed to have a font after construction.
     pub font_manager: FontManager,
-
-    /// General scaling factor for DPI or resolution independence (e.g., 1.0, 1.5, 2.0).
+    pub image_cache: HashMap<String, Vec<u8>>,
     pub global_scale_factor: f32,
 }
 
 impl UIMainContext {
     /// Creates a new, initialized UIMainContext, requiring the path to the font file.
-    ///
-    /// This is the application's first opportunity to set up necessary global resources.
-    ///
-    /// P: The type that can be converted into a file path (e.g., String, &str).
     pub fn new<P: AsRef<Path>>(font_path: P) -> Result<Self, Box<dyn std::error::Error>> {
-        // Attempt to initialize the FontManager by loading the font file.
-        // This is where file I/O errors and font parsing errors are propagated.
         let font_manager = FontManager::new(font_path)?;
-
         Ok(UIMainContext {
             font_manager,
-            global_scale_factor: 1.0, // Default to no scaling
+            image_cache: HashMap::new(),
+            global_scale_factor: 1.0,
         })
+    }
+
+    /// Checks if an image is currently loaded and cached.
+    pub fn has_image(&self, path: &str) -> bool {
+        self.image_cache.contains_key(path)
+    }
+
+    /// Retrieves a read-only slice of the cached image data for a given path.
+    pub fn get_image_data(&self, path: &str) -> Option<&[u8]> {
+        self.image_cache.get(path).map(|v| v.as_slice())
+    }
+
+    /// Adds new image data to the cache. This method would be called by the 
+    /// Application layer during initialization or loading screens.
+    pub fn add_image(&mut self, path: String, data: Vec<u8>) {
+        // NOTE: In a real system, you'd also store width/height metadata.
+        self.image_cache.insert(path, data);
     }
 }

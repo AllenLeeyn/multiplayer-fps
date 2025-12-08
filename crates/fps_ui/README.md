@@ -62,6 +62,20 @@ The $\text{UI}$ supports flexible positioning that adapts to different screen si
 ## 📁 `fps_ui` Crate File Structure
 
 ```
+fps_ui/
+├── src/
+│   ├── lib.rs
+│   ├── driver.rs       <-- NEW: Handles Window/Pixels state only.
+│   ├── events.rs       <-- Communication types (Input/Output).
+│   ├── context.rs      <-- Global Resources (UIMainContext).
+│   ├── fonts.rs        <-- Font Management.
+│   ├── layers.rs       <-- Orchestration (UIManager/UILayer).
+│   └── components/     <-- Component Definitions.
+│       ├── mod.rs      <-- Component Trait.
+│       └── button.rs   <-- Example Component.
+└── Cargo.toml
+
+
 │   ├── fps_ui/
 │   │   └── src/
 │   │       ├── lib.rs                  # Crate entry point and public API exports.
