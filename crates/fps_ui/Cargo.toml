@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ab_glyph = "0.2.32"
 glam = "0.30.9"
 pixels = "0.15.0"
 winit = "0.30.12"

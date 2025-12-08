@@ -1,46 +1,37 @@
 use pixels::{Pixels, SurfaceTexture};
-use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+pub use winit::window::{Window, WindowAttributes, WindowId};
+
+use super::UIMainContext;
 
 // --- Imports/Placeholders for your crate modules ---
-pub struct UIManager;
-impl UIManager {
+pub struct UIRenderer;
+impl UIRenderer {
     pub fn default() -> Self {
         Self
     }
 }
-
-pub struct UIMainContext;
-impl UIMainContext {
-    pub fn default() -> Self {
-        Self
-    }
-}
-
-/// Public alias for Winit configuration
-pub type WinAttrs = WindowAttributes;
 
 /// The Application Driver.
 /// This struct maintains the state of your application and handles the Winit events.
 /// The Window and Pixels objects are stored separately to resolve self-reference errors.
 pub struct AppDriver {
     /// The Winit Window handle, wrapped in Arc to facilitate surface borrowing.
-    pub window: Option<Arc<Window>>,
+    window: Option<Window>,
 
     /// The Pixels renderer, bound to the Window's lifetime (conceptually).
     pub pixels: Option<Pixels<'static>>,
 
     /// Your UI Manager (Logic)
-    pub manager: UIManager,
+    pub renderer: UIRenderer,
 
     /// Your Global Resources (Fonts, Style)
     pub context: UIMainContext,
 
     /// Pending configuration to be used when creating the window
-    pub window_attrs: Option<WinAttrs>,
+    pub window_attrs: Option<WindowAttributes>,
 }
 
 impl ApplicationHandler for AppDriver {
@@ -59,14 +50,12 @@ impl ApplicationHandler for AppDriver {
                 }
             };
 
-            // 1. Wrap Window in Arc (Owner)
-            let window_arc = Arc::new(window);
-            let size = window_arc.inner_size();
+            let size = window.inner_size();
 
             // 2. Create Pixels (Borrower)
             let surface_texture = unsafe {
                 // 1. Get the raw reference pointer
-                let raw_ptr = &*window_arc as *const Window;
+                let raw_ptr = &window as *const Window;
                 // 2. Transmute the pointer's lifetime to 'static
                 let static_window_ref: &'static Window = &*raw_ptr;
 
@@ -77,7 +66,7 @@ impl ApplicationHandler for AppDriver {
             match Pixels::new(size.width, size.height, surface_texture) {
                 Ok(p) => {
                     // 3. Store them separately in AppDriver fields
-                    self.window = Some(window_arc);
+                    self.window = Some(window);
                     self.pixels = Some(p);
                 }
                 Err(e) => {
@@ -138,9 +127,9 @@ impl ApplicationHandler for AppDriver {
 /// The Entry Point for the UI crate.
 /// Initializes the Winit EventLoop and runs the AppDriver.
 pub fn run_event_loop(
-    ui_manager: UIManager,
+    ui_renderer: UIRenderer,
     ui_context: UIMainContext,
-    attrs: WinAttrs,
+    attrs: WindowAttributes,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new()?;
 
@@ -150,7 +139,7 @@ pub fn run_event_loop(
     let mut app = AppDriver {
         window: None,
         pixels: None,
-        manager: ui_manager,
+        renderer: ui_renderer,
         context: ui_context,
         window_attrs: Some(attrs),
     };

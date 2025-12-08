@@ -8,10 +8,10 @@ edition = "2024"
 [workspace]
 members = [
     ".",
-    "components/fps_audio",
-    "components/fps_core",
-    "components/fps_levels",
-    "components/fps_net",
-    "components/fps_render",
-    "components/fps_ui",
+    "crates/fps_audio",
+    "crates/fps_core",
+    "crates/fps_levels",
+    "crates/fps_net",
+    "crates/fps_render",
+    "crates/fps_ui",
 ]
