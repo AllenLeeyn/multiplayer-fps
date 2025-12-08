@@ -145,7 +145,7 @@ Computer-controlled players can participate in games
     *   **Graphics & User Interface**
         *   `graphics/windowing: winit`
         *   `graphics/rendering_backend: pixels`
-        *   `graphics/math: gaml`
+        *   `graphics/math: glam`
     *   **Audio**
         *   `audio/playback: rodio`
     *   **Application Logic & Abstraction (Custom Crates)**
@@ -169,10 +169,9 @@ Computer-controlled players can participate in games
 
     *   **Server-Side Setup (when hosting):**
         *   Operates as the authoritative source for the game state.
-        *   Employs a multi-threaded design for optimal performance and responsiveness:
-            *   **UDP Read Thread:** Continuously receives incoming UDP packets (client inputs) via `std::net::UdpSocket` and `net` crate, deserializes them (`bincode`), and queues them for processing.
+        *   Employs a two-threaded design for performance and responsiveness:
+            *   **UDP Thread:** Continuously receives incoming UDP packets (client inputs) via `std::net::UdpSocket` and `net` crate, deserializes them (`bincode`), and queues them for processing. Sends outgoing UDP packets (game state updates) to all connected clients via `std::net::UdpSocket` and `net` crate, serializing data (`bincode`).
             *   **Gameplay Loop Thread:** The main game logic thread. It dequeues client inputs, updates the authoritative game state using the `core` crate (handling physics, scoring, AI, player abilities, grace periods), and prepares game state updates for clients. It also manages game progression (winning conditions, level changes).
-            *   **UDP Write Thread:** Sends outgoing UDP packets (game state updates) to all connected clients via `std::net::UdpSocket` and `net` crate, serializing data (`bincode`).
         *   Manages client connections, disconnections, and authentication (username).
         *   Integrates AI opponents using the `core` crate's game logic.
 
@@ -232,6 +231,7 @@ multiplayer_fps/
 │   │   │   │       }
 │   │   │   │
 │   │   │   ├── message.rs
+│   │   │   │   •   pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Error>>
 │   │   │   │   •   pub struct Message {
 │   │   │   │           pub header: MessageHeader,
 │   │   │   │           pub payload: Option<Vec<u8>>,
@@ -294,14 +294,14 @@ multiplayer_fps/
 │   │   │   │           reliable_queue: HashMap<u32, ReliableEntry>,
 │   │   │   │       }
 │   │   │   │   •   impl NetSocket {
-│   │   │   │           pub fn bind(addr: &str, timeout: Duration) -> Result<Self>
-│   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr)>
+│   │   │   │           pub fn bind(addr: &str, timeout: Duration) -> -> Result<Self, Box<dyn Error>>
+│   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr), Box<dyn Error>>
 │   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
-│   │   │   │           pub fn set_timeout(&self, timeout: Duration) -> Result<()>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
+│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
+│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
+│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
+│   │   │   │           pub fn set_timeout(&self, timeout: Duration) -> Result<(), Box<dyn Error>>
+│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
 │   │   │   │       }
 │   │   │   │
 │   │   │   ├── client_socket.rs
@@ -311,17 +311,17 @@ multiplayer_fps/
 │   │   │   │           ping_manager: PingManager,
 │   │   │   │       }
 │   │   │   │   •   impl ClientSocket {
-│   │   │   │           pub fn new(local_addr: &str, server_addr: &str, ping_timeout: Duration) -> Result<Self>
-│   │   │   │           pub fn recv(&mut self) -> Result<Option<Message>>
+│   │   │   │           pub fn new(local_addr: &str, server_addr: &str, ping_timeout: Duration) -> Result<Self, Box<dyn Error>>
+│   │   │   │           pub fn recv(&mut self) -> Result<Option<Message>, Box<dyn Error>>
 │   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, msg: &Message) -> Result<usize> 
-│   │   │   │           pub fn send_reliable(&mut self, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
-│   │   │   │           pub fn send_ping(&mut self) -> Result<u32>
+│   │   │   │           pub fn send(&mut self, msg: &Message) -> Result<usize, Box<dyn Error>> 
+│   │   │   │           pub fn send_reliable(&mut self, msg: &Message) -> Result<usize, Box<dyn Error>>
+│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
+│   │   │   │           pub fn send_ping(&mut self) -> Result<u32, Box<dyn Error>>
 │   │   │   │           pub fn handle_pong(&mut self, seq: u32) -> Option<Duration>
-│   │   │   │           pub fn handle_ping(&self, seq: u32) -> Result<Message>
-│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<u32>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
+│   │   │   │           pub fn handle_ping(&self, seq: u32) -> Result<Message, Box<dyn Error>>
+│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr>
+│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
 │   │   │   │       }
 │   │   │   │
 │   │   │   ├── server_socket.rs
@@ -329,26 +329,26 @@ multiplayer_fps/
 │   │   │   │           pub last_seen: u64,
 │   │   │   │       }
 │   │   │   │   •   pub struct ServerSocket {
-│   │   │   │           socket: Arc<Mutex<NetSocket>>,
-│   │   │   │           clients: Arc<RwLock<HashMap<SocketAddr, ClientInfo>>>,
-│   │   │   │           ping_manager: Arc<Mutex<PingManager>>,
+│   │   │   │           socket: NetSocket,
+│   │   │   │           clients: HashMap<SocketAddr, ClientInfo>,
+│   │   │   │           ping_manager: PingManager,
 │   │   │   │           timeout: Duration,
 │   │   │   │       }
 │   │   │   │   •   impl ServerSocket {
-│   │   │   │           pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self>
-│   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr)> 
+│   │   │   │           pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self, Box<dyn Error>>
+│   │   │   │           pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>, Box<dyn Error>>
 │   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize>
-│   │   │   │           pub fn resend_pending(&mut self) -> Result<()>
-│   │   │   │           pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>>
-│   │   │   │           pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32>
+│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) ->  Result<usize, Box<dyn Error>>
+│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
+│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
+│   │   │   │           pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>>
+│   │   │   │           pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32, Box<dyn Error>>
 │   │   │   │           pub fn handle_pong(&mut self, addr: SocketAddr, seq: u32) -> Option<Duration>
-│   │   │   │           pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message)>
-│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<u32>
+│   │   │   │           pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message), Box<dyn Error>>
+│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr>
 │   │   │   │           pub fn client_list(&self) -> Vec<SocketAddr>
 │   │   │   │           pub fn remove_stale_clients(&mut self) -> Vec<SocketAddr>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr>
+│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
 │   │   │   │       }
 │   │   │   │
 │   │   │   ├── lib.rs
@@ -359,6 +359,26 @@ multiplayer_fps/
 │   │   └── Cargo.toml
 │   ├── fps_render/
 │   ├── fps_ui/
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── fonts.rs  
+│   │       ├── context.rs 
+│   │       ├── window.rs
+│   │       ├── input.rs
+│   │       ├── layers.rs
+│   │       ├── events.rs
+│   │       ├── renderer.rs
+│   │       ├── components/
+│   │       │   ├── mod.rs
+│   │       │   ├── component.rs
+│   │       │   ├── button.rs
+│   │       │   ├── label.rs
+│   │       │   ├── text_field.rs
+│   │       │   └── dynamic_pixel.rs
+│   │       └── utils/
+│   │           ├── mod.rs
+│   │           └── geometry.rs
+│   │
 │   ├── fps_levels/
 │   └── fps_audio/
 ├── assets/
