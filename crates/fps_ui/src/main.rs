@@ -4,6 +4,7 @@ use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId, WindowAttributes};
+use std::time::Instant;
 
 // --- Imports from fps_ui library ---
 use fps_ui::{
@@ -12,11 +13,14 @@ use fps_ui::{
     layers::UIManager,
     Color,
     components::panel::{Panel, RenderSource},
+    components::{Label, FpsComponent},
+    events::{ComponentUpdate},
     geometry::Rect,
     layers::UILayer,
+    layout::{AnchorPoint, LengthMode, LayoutMetrics},
 };
 
-const WINDOW_WIDTH: u32 = 1200;
+const WINDOW_WIDTH: u32 = 1600;
 const WINDOW_HEIGHT: u32 = 900;
 
 /// The central application struct that holds the necessary state.
@@ -25,6 +29,10 @@ struct App<'a> {
     driver: Option<AppDriver<'a>>, // Carries the 'a lifetime
     manager: UIManager,
     context: UIMainContext,
+
+    last_fps_update: Instant,
+    frame_count: u32,
+    current_fps: u32,
 }
 
 // --------------------------------------------------------------------------
@@ -79,7 +87,33 @@ impl<'a> ApplicationHandler for App<'a> {
                 event_loop.exit();
             },
             WindowEvent::RedrawRequested => {
-                if let Err(e) = driver.render(&self.manager, &self.context) { 
+                
+                // 1. FPS Calculation and Update
+                let now = Instant::now();
+                self.frame_count += 1;
+
+                // Update the FPS counter approximately once per second
+                if now.duration_since(self.last_fps_update).as_secs_f32() >= 1.0 {
+                    let duration = now.duration_since(self.last_fps_update).as_secs_f32();
+                    let fps = (self.frame_count as f32 / duration).round() as u32;
+
+                    self.current_fps = fps;
+                    self.last_fps_update = now;
+                    self.frame_count = 0;
+                    
+                    // --- Send Update to UIManager ---
+                    let fps_update = ComponentUpdate::SetValue(
+                        "fps_counter".to_string(), // Target ID of the FpsComponent
+                        self.current_fps as f32,
+                    );
+
+                    // Construct the Vec<ComponentUpdate> and call the UIManager method
+                    let updates = vec![fps_update];
+                    self.manager.apply_updates(updates);
+                }
+
+                // 2. Render the UI
+                if let Err(e) = driver.render(&mut self.manager, &self.context) { 
                     eprintln!("Pixels error during render: {:?}", e);
                     event_loop.exit();
                 } 
@@ -107,7 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new()?;
 
     // Initialize UI Context and Manager (no lifetime issues here)
-    let ui_context = UIMainContext::new("assets/fonts/Sono-Regular.ttf")?;
+    let ui_context = UIMainContext::new("assets/fonts/VCR_OSD_MONO_1.001.ttf")?;
     let mut ui_manager = UIManager::new();
     let full_bounds = Rect::new(0.0, 0.0, WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     
@@ -126,19 +160,66 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     ui_manager.add_layer(background_layer).expect("Failed to add background layer.");
+
+    // --- 2. Foreground Layer with Label ---
+
+    // Define title label
+    let label_bounds = Rect::new(0.10, 0.10, 100.0, 50.0); // x=20, y=20, max width=300, max height=50
+    let title_label = Label::new(
+        "title".to_string(),
+        "aMAZE".to_string(), // Initial text
+        256.0,                  // Font size in virtual pixels
+        Color::new(255, 255, 255, 255), // White color
+        label_bounds,
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            position_mode: LengthMode::Percentage,
+            size_mode: LengthMode::AbsolutePixels,
+        }
+    );
+
+    // FpsComponent
+    let fps_bounds = Rect::new(10.0, 10.0, 150.0, 32.0); // Top-left corner, slightly offset
+    let fps_component = FpsComponent::new(
+        "fps_counter".to_string(), // Crucial ID for updates
+        32.0,                      // Font size
+        Color::new(255, 255, 0, 255), // Yellow color
+        fps_bounds,
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            position_mode: LengthMode::AbsolutePixels,
+            size_mode: LengthMode::AbsolutePixels,
+        }
+    );
     
-    // FIX: Initialize App with the 'static lifetime.
-    // We use a block and unsafe transmute to satisfy the type checker, 
-    // which is unfortunately necessary when using Pixels/Winit together in this pattern.
+    let foreground_layer = UILayer {
+        id: "foreground".to_string(),
+        z_index: 10,
+        is_visible: true,
+        is_modal: false,
+        components: vec![
+            Box::new(title_label),
+            Box::new(fps_component),
+        ],
+    };
+
+    ui_manager.add_layer(foreground_layer).expect("Failed to add foreground layer.");
+
+    // --- 3. App Initialization and Run (Unchanged) ---
+    let now = Instant::now();
     let mut app: App<'static> = App {
-        window: None,       // Explicitly initialize Option<Window>
-        driver: None,       // Explicitly initialize Option<AppDriver<'static>>
-        manager: ui_manager, // Use the initialized value
-        context: ui_context, // Use the initialized value
+        window: None,
+        driver: None,
+        manager: ui_manager,
+        context: ui_context,
+        
+        // --- FPS Tracking Initialization ---
+        last_fps_update: now, // Initialize the timer start
+        frame_count: 0,       // Initialize frame count
+        current_fps: 0,       // Initialize displayed FPS
     };
 
     // Run the event loop
-    // NOTE: Winit's run_app function handles the window ownership cleanly.
     event_loop.run_app(&mut app)?;
 
     println!("--- fps_ui Test Harness Exited Successfully ---");

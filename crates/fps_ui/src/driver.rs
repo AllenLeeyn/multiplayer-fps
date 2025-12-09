@@ -38,13 +38,12 @@ impl<'a> AppDriver<'a> {
     }
 
     /// Draws the UI state onto the frame buffer and presents it to the screen.
-    
-    pub fn render(&mut self, manager: &UIManager, context: &UIMainContext) -> Result<(), pixels::Error> {
-            let frame = self.pixels.frame_mut();
-            manager.draw(frame, context, self.width, self.height);
-            self.pixels.render()?;
-            Ok(())
-        }
+    pub fn render(&mut self, manager: &mut UIManager, context: &UIMainContext) -> Result<(), pixels::Error> {
+        let frame = self.pixels.frame_mut();
+        manager.draw(frame, context, self.width, self.height);
+        self.pixels.render()?;
+        Ok(())
+    }
 
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)

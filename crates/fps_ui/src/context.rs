@@ -1,4 +1,4 @@
-use super::font::FontManager;
+use super::fonts::FontManager;
 use std::{collections::HashMap, path::Path};
 
 /// UIMainContext holds application-wide, mostly static resources

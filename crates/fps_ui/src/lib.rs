@@ -1,15 +1,17 @@
 pub mod components;
 pub mod context;
 pub mod events;
-pub mod font;
+pub mod fonts;
 pub mod geometry;
 pub mod driver;
 pub mod layers;
+pub mod layout;
 
 pub use context::UIMainContext;
 pub use geometry::Rect;
 pub use driver::AppDriver;
 pub use events::{ComponentUpdate, UIEvent, UIInputEvent};
+pub use layout::{AnchorPoint, LayoutMetrics, LengthMode};
 
 /// Represents a simple RGB color with 8-bit channels.
 /// Used universally across UI components and rendering logic (u8 format).

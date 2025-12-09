@@ -7,6 +7,7 @@ use crate::components::Component;
 use crate::context::UIMainContext;
 use crate::events::{ComponentUpdate, UIEvent, UIInputEvent};
 use crate::geometry::Bounds;
+use crate::layout::LayoutMetrics;
 
 // --- Render Source Definition ---
 
@@ -68,10 +69,16 @@ impl Component for Panel {
         self.bounds
     }
 
+    fn layout_metrics(&self) -> LayoutMetrics {
+        // Returns the default, absolute (0, 0) TopLeft metric as a placeholder.
+        LayoutMetrics::default()
+    }
+
     /// Panels typically do not respond to input.
     fn handle_input(&mut self, _event: &UIInputEvent) -> Vec<UIEvent> {
         Vec::new() 
     }
+
     fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32) {
         // Calculate the actual integer pixel area the panel covers on the screen
         let start_x = self.bounds.x.round() as usize;
@@ -164,6 +171,16 @@ impl Component for Panel {
                 true 
             }
             _ => false,
+        }
+    }
+    
+    // In panel.rs (assuming Component trait was updated)
+    fn requires_redraw(&mut self) -> bool {
+        if self.needs_redraw {
+            self.needs_redraw = false; // Reset the flag immediately
+            true
+        } else {
+            false
         }
     }
 }

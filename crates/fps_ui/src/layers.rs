@@ -141,15 +141,13 @@ impl UIManager {
 
     /// Draws all visible layers and their components onto the pixel frame buffer.
     /// Called by the AppDriver during the RedrawRequested event.
-    pub fn draw(&self, frame: &mut [u8], context: &UIMainContext, width: u32, height: u32) {
-        // Sort layers by Z-index to ensure correct depth order
-        let mut sorted_layers: Vec<&UILayer> = self.layers.values().collect();
+    pub fn draw(&mut self, frame: &mut [u8], context: &UIMainContext, width: u32, height: u32) {
+        let mut sorted_layers: Vec<&mut UILayer> = self.layers.values_mut().collect();
         sorted_layers.sort_by_key(|layer| layer.z_index);
 
-        for layer in sorted_layers.iter().filter(|l| l.is_visible) {
-            // Note: We pass the screen dimensions to the component's draw method
-            for component in layer.components.iter() {
-                component.draw(frame, context, width, height); 
+        for layer in sorted_layers.iter_mut().filter(|l| l.is_visible) {
+            for component in layer.components.iter_mut() {
+                    component.draw(frame, context, width, height);
             }
         }
     }
