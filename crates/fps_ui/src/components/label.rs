@@ -82,9 +82,7 @@ impl Component for Label {
 
     /// Draws the text using the FontManager's dedicated draw_text method, 
     /// after calculating the absolute position based on LayoutMetrics.
-    fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32) {
-        let font_manager = &context.font_manager;
-        
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32) {
         // --- 1. Calculate Absolute Position and Size ---
         
         // Convert screen dimensions to f64 for calculation
@@ -106,7 +104,7 @@ impl Component for Label {
 
         // --- 2. Call the FontManager for Drawing ---
 
-        font_manager.draw_text(
+        context.font_manager.draw_text(
             frame, 
             &self.text, 
             self.font_size, 

@@ -30,5 +30,5 @@ pub trait Component: Send + Sync + Debug {// Identification
     fn requires_redraw(&mut self) -> bool;
     
     // Rendering
-    fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32);
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32);
 }

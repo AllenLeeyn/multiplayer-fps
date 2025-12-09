@@ -113,7 +113,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 }
 
                 // 2. Render the UI
-                if let Err(e) = driver.render(&mut self.manager, &self.context) { 
+                if let Err(e) = driver.render(&mut self.manager, &mut self.context) { 
                     eprintln!("Pixels error during render: {:?}", e);
                     event_loop.exit();
                 } 
@@ -164,13 +164,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     // --- 2. Foreground Layer with Label ---
 
     // Define title label
-    let label_bounds = Rect::new(0.10, 0.10, 100.0, 50.0); // x=20, y=20, max width=300, max height=50
+    let label_bounds = Rect::new(0.11, 0.115, 100.0, 50.0); // x=20, y=20, max width=300, max height=50
     let title_label = Label::new(
         "title".to_string(),
         "aMAZE".to_string(), // Initial text
-        256.0,                  // Font size in virtual pixels
+        360.0,                  // Font size in virtual pixels
         Color::new(255, 255, 255, 255), // White color
         label_bounds,
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            position_mode: LengthMode::Percentage,
+            size_mode: LengthMode::AbsolutePixels,
+        }
+    );
+    let label2_bounds = Rect::new(0.115, 0.125, 100.0, 50.0); // x=20, y=20, max width=300, max height=50
+    let title2_label = Label::new(
+        "title2".to_string(),
+        "aMAZE".to_string(), // Initial text
+        362.0,                  // Font size in virtual pixels
+        Color::new(0, 0, 0, 255), // White color
+        label2_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
             position_mode: LengthMode::Percentage,
@@ -198,6 +211,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         is_visible: true,
         is_modal: false,
         components: vec![
+            Box::new(title2_label),
             Box::new(title_label),
             Box::new(fps_component),
         ],

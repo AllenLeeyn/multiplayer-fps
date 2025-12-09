@@ -141,7 +141,7 @@ impl UIManager {
 
     /// Draws all visible layers and their components onto the pixel frame buffer.
     /// Called by the AppDriver during the RedrawRequested event.
-    pub fn draw(&mut self, frame: &mut [u8], context: &UIMainContext, width: u32, height: u32) {
+    pub fn draw(&mut self, frame: &mut [u8], context: &mut UIMainContext, width: u32, height: u32) {
         let mut sorted_layers: Vec<&mut UILayer> = self.layers.values_mut().collect();
         sorted_layers.sort_by_key(|layer| layer.z_index);
 

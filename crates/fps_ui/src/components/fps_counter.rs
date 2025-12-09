@@ -90,8 +90,7 @@ impl Component for FpsComponent {
         std::mem::take(&mut self.needs_redraw)
     }
 
-    fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32) {
-        let font_manager = &context.font_manager;
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32) {
         
         let screen_w_f64 = screen_width as f64;
         let screen_h_f64 = screen_height as f64;
@@ -104,7 +103,7 @@ impl Component for FpsComponent {
             screen_h_f64,
         );
 
-        font_manager.draw_text(
+        context.font_manager.draw_text(
             frame, 
             &self.text, // Use the dynamically updated text string
             self.font_size, 

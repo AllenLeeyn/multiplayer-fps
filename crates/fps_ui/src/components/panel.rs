@@ -79,7 +79,7 @@ impl Component for Panel {
         Vec::new() 
     }
 
-    fn draw(&self, frame: &mut [u8], context: &UIMainContext, screen_width: u32, screen_height: u32) {
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32) {
         // Calculate the actual integer pixel area the panel covers on the screen
         let start_x = self.bounds.x.round() as usize;
         let start_y = self.bounds.y.round() as usize;
