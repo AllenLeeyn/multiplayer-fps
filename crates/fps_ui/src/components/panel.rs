@@ -1,14 +1,16 @@
 use std::fmt::{Debug, Formatter, Result};
 use std::cmp::min;
 
-// Import the canonical Color from the crate root
-use crate::Color; 
-use crate::components::Component;
-use crate::context::UIMainContext;
-use crate::events::{ComponentUpdate, UIEvent, UIInputEvent};
-use crate::geometry::Bounds;
-use crate::layout::LayoutMetrics;
-
+use super::super::{
+    Color,
+    Bounds,
+    UIMainContext,
+    Component,
+    ComponentUpdate,
+    UIEvent,
+    LayoutMetrics,
+    WindowEvent
+};
 // --- Render Source Definition ---
 
 /// Defines the source and type of rendering for the Panel component.
@@ -75,7 +77,7 @@ impl Component for Panel {
     }
 
     /// Panels typically do not respond to input.
-    fn handle_input(&mut self, _event: &UIInputEvent) -> Vec<UIEvent> {
+    fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
         Vec::new() 
     }
 

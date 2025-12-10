@@ -1,9 +1,14 @@
 use std::collections::HashMap;
 
-use crate::context::UIMainContext;
-use crate::components::Component;
-use crate::events::{UIInputEvent, ComponentUpdate, UIEvent, ElementState};
-use crate::events::UIInputEvent::{CursorMoved, MouseButton, KeyboardInput};
+use super::{
+    UIMainContext,
+    Component,
+    ComponentUpdate,
+    UIEvent,
+    WindowEvent,
+    ElementState,
+    MouseButton
+};
 
 /// A container for UI components that shares a common Z-order and visibility state.
 #[derive(Debug)]
@@ -22,12 +27,18 @@ pub struct UIManager {
     layers: HashMap<String, UILayer>,
     focused_component_id: Option<String>,
     hovered_component_id: Option<String>,
+    width: f64,
+    height: f64,
+    last_cursor_position: (f64, f64),
 }
 
 impl UIManager {
     /// Creates a new, empty UIManager.
-    pub fn new() -> Self {
-        UIManager::default()
+    pub fn new(width: u32, height: u32) -> Self {
+        let mut m = UIManager::default();
+        m.width = width as f64;
+        m.height = height as f64;
+        m
     }
 
     /// Adds a layer to the manager. Returns an error if the ID already exists.
@@ -39,74 +50,30 @@ impl UIManager {
         Ok(())
     }
 
-    /// Processes an abstract input event, performing focus checks, hit-testing, and routing.
-    pub fn process_input(&mut self, input_event: &UIInputEvent) -> Vec<UIEvent> {
-        let mut generated_events = Vec::new();
-        let mut input_consumed = false;
-        
-        // --- 1. KEYBOARD FOCUS CHECK (High Priority) ---
-        if let Some(focused_id) = &self.focused_component_id.clone() {
-            if let Some(component) = self.find_component_by_id_mut(focused_id) {
-                let events = component.handle_input(input_event);
-                generated_events.extend(events);
-                
-                if matches!(input_event, KeyboardInput { .. }) {
-                    input_consumed = true;
-                }
-            } else {
-                self.focused_component_id = None;
-            }
+    /// Processes an abstract input event by dispatching it to dedicated handlers.
+    pub fn process_input(&mut self, input_event: &WindowEvent) -> Vec<UIEvent> {
+        use winit::event::WindowEvent::*;
+
+        match input_event {
+            // High-priority text and key routing to the focused component
+            KeyboardInput { .. }  => {
+                self.handle_keyboard_input(input_event)
+            },
+
+            // Mouse movement and hover
+            WindowEvent::CursorMoved { position, .. } => {
+                self.handle_cursor_movement(position.x, position.y)
+            },
+            
+            // Mouse button for focus change and click routing
+            MouseInput { state, button, .. } => {
+                let (x, y) = self.last_cursor_position;
+                self.handle_mouse_button(x, y, state, button, input_event)
+            },
+
+            // Ignore other input types for now (e.g., MouseWheel, Touch)
+            _ => Vec::new(),
         }
-
-        // --- 2. MOUSE EVENT HIT-TESTING & BUBBLING ---
-        let mouse_coords = match input_event {
-            CursorMoved { x, y } | MouseButton { x, y, .. } => Some((*x, *y)),
-            _ => None,
-        };
-
-        if let Some((mx, my)) = mouse_coords {
-            // Sort layers by Z-index to process input from top to bottom
-            let mut sorted_layers: Vec<&mut UILayer> = self.layers.values_mut().collect();
-            sorted_layers.sort_by_key(|layer| layer.z_index);
-            sorted_layers.reverse();
-
-            for layer in sorted_layers.iter_mut().filter(|l| l.is_visible) {
-                // Components within a layer are processed back-to-front (rev)
-                for component in layer.components.iter_mut().rev() {
-                    let bounds = component.bounds();
-                    
-                    // FIX: Convert f32 (mx, my) to f64 to match bounds.contains signature
-                    if bounds.contains(mx as f64, my as f64) { 
-                        self.hovered_component_id = Some(component.id().to_string());
-                        
-                        // Pass input to the top-most hit component if not already consumed
-                        if !input_consumed {
-                            let events = component.handle_input(input_event);
-                            generated_events.extend(events);
-                            input_consumed = true;
-                            
-                            // Basic Focus Logic: A mouse press on a component gives it focus
-                            if matches!(input_event, MouseButton { state, .. } if *state == ElementState::Pressed) {
-                                self.focused_component_id = Some(component.id().to_string());
-                            }
-                        }
-                    }
-                }
-                
-                // If the top visible layer is modal OR input was consumed, stop processing layers below.
-                if input_consumed || layer.is_modal {
-                    break; 
-                }
-            }
-        }
-        
-        // --- 3. GLOBAL INPUT / UNFOCUS LOGIC ---
-        // If a mouse click happened but didn't hit any component, clear focus.
-        if !input_consumed && matches!(input_event, MouseButton { state, .. } if *state == ElementState::Pressed) {
-             self.focused_component_id = None;
-        }
-
-        generated_events
     }
 
     /// Applies updates from the application to the corresponding components and layers.
@@ -141,13 +108,13 @@ impl UIManager {
 
     /// Draws all visible layers and their components onto the pixel frame buffer.
     /// Called by the AppDriver during the RedrawRequested event.
-    pub fn draw(&mut self, frame: &mut [u8], context: &mut UIMainContext, width: u32, height: u32) {
+    pub fn draw(&mut self, frame: &mut [u8], context: &mut UIMainContext) {
         let mut sorted_layers: Vec<&mut UILayer> = self.layers.values_mut().collect();
         sorted_layers.sort_by_key(|layer| layer.z_index);
 
         for layer in sorted_layers.iter_mut().filter(|l| l.is_visible) {
             for component in layer.components.iter_mut() {
-                    component.draw(frame, context, width, height);
+                    component.draw(frame, context, self.width as u32, self.height as u32);
             }
         }
     }
@@ -162,5 +129,98 @@ impl UIManager {
             }
         }
         None
+    }
+
+    /// Helper to perform a reverse Z-order hit test to find the top-most component at (x, y).
+    /// This method assumes it has access to the current screen dimensions (e.g., from AppDriver).
+    fn hit_test_component(&self, x: f64, y: f64) -> Option<String> {
+        let mut sorted_layers: Vec<&UILayer> = self.layers.values().collect();
+        // Sort in reverse Z-order (highest Z-index first)
+        sorted_layers.sort_by_key(|layer| std::cmp::Reverse(layer.z_index));
+
+        for layer in sorted_layers.iter().filter(|l| l.is_visible) {
+            // Components are hit-tested in reverse order of definition (last added is on top)
+            for component in layer.components.iter().rev() {
+                let bounds = component.bounds();
+                let layout = component.layout_metrics();
+                
+                let abs_rect = crate::geometry::calculate_absolute_rect(
+                    &layout, 
+                    &bounds, 
+                    self.width, 
+                    self.height,
+                );
+                
+                // Use Rect/Bounds contains method from geometry.rs
+                if abs_rect.contains(x, y) {
+                    return Some(component.id().to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Handles all KeyboardInput and ReceivedCharacter events by routing to the focused component.
+    fn handle_keyboard_input(&mut self, event: &WindowEvent) -> Vec<UIEvent> {
+        let mut generated_events = Vec::new();
+        
+        if let Some(focused_id) = &self.focused_component_id.clone() {
+            if let Some(component) = self.find_component_by_id_mut(focused_id) {
+                generated_events.extend(component.handle_input(event));
+            } else {
+                // Focused component disappeared, clear focus
+                self.focused_component_id = None;
+            }
+        }
+        
+        generated_events
+    }
+
+    /// Handles CursorMoved events, managing hover state and routing the event.
+    fn handle_cursor_movement(&mut self, x: f64, y: f64) -> Vec<UIEvent> {
+        // Find the top-most component at (x, y)
+        let hit_target_id = self.hit_test_component(x, y);
+        self.last_cursor_position = (x, y);
+        self.hovered_component_id = hit_target_id;
+        Vec::new()
+    }
+
+    /// Handles MouseButton events, managing focus and routing the click.
+    fn handle_mouse_button(&mut self, x: f64, y: f64, state: &ElementState, button: &MouseButton, raw_event:&WindowEvent ) -> Vec<UIEvent> {
+        let mut generated_events = Vec::new();
+
+        println!("click on {} {}", x, y);
+        if *state == ElementState::Pressed && *button == MouseButton::Left {
+            let current_focus_id = self.focused_component_id.clone();
+            let hit_target_id = self.hit_test_component(x, y);
+
+            if hit_target_id.as_ref() != current_focus_id.as_ref() {
+                if let Some(old_id) = current_focus_id {
+                    if let Some(old_component) = self.find_component_by_id_mut(&old_id) {
+                        old_component.set_focus(false);
+                    }
+                }
+                
+                // Focus new
+                if let Some(new_id) = hit_target_id.clone() {
+                    self.focused_component_id = Some(new_id.clone()); 
+                    if let Some(new_component) = self.find_component_by_id_mut(&new_id) {
+                        new_component.set_focus(true);
+                    }
+                } else {
+                    // Clicked outside
+                    self.focused_component_id = None;
+                }
+            }
+            // B. Route the click event to the component that was hit (if one exists)
+
+            if let Some(hit_id) = hit_target_id {
+                if let Some(component) = self.find_component_by_id_mut(&hit_id) {
+                    generated_events.extend(component.handle_input(raw_event));
+                }
+            }
+        }
+        
+        generated_events
     }
 }

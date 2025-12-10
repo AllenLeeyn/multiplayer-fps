@@ -81,14 +81,16 @@ impl Rect {
     /// Converts the floating-point Rect to an IntRect, snapping coordinates to pixels.
     /// This is used immediately prior to drawing for pixel-perfect rendering.
     pub fn to_int_rect(&self) -> IntRect {
-        // Use rounding or truncation based on rendering preference. Truncation (as i32) 
-        // is often used for top-left, and width/height are calculated from that.
-        let x_int = self.x as i32;
-        let y_int = self.y as i32;
-        
-        // Calculate width/height based on the difference between integer coordinates
-        let w_int = (self.x + self.w).round() as i32 - x_int;
-        let h_int = (self.y + self.h).round() as i32 - y_int;
+        // Top-left is truncated (as i32)
+        let x_int = self.x.trunc() as i32;
+        let y_int = self.y.trunc() as i32;
+
+        // Bottom-right is rounded, then difference calculates the integer width/height.
+        let x_end = (self.x + self.w).round() as i32;
+        let y_end = (self.y + self.h).round() as i32;
+
+        let w_int = x_end - x_int;
+        let h_int = y_end - y_int;
 
         IntRect {
             x: x_int,

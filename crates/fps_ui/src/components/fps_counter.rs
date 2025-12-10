@@ -1,9 +1,14 @@
-use crate::Color;
-use crate::components::Component;
-use crate::context::UIMainContext;
-use crate::events::{ComponentUpdate, UIEvent, UIInputEvent};
-use crate::geometry::{Bounds, calculate_absolute_rect};
-use crate::layout::LayoutMetrics;
+use super::super::{
+    Color,
+    Bounds,
+    calculate_absolute_rect,
+    UIMainContext,
+    Component,
+    ComponentUpdate,
+    UIEvent,
+    LayoutMetrics,
+    WindowEvent
+};
 
 /// A specialized component that displays the current Frames Per Second (FPS).
 #[derive(Debug, Clone)]
@@ -70,7 +75,7 @@ impl Component for FpsComponent {
         self.layout_metrics
     }
     
-    fn handle_input(&mut self, _event: &UIInputEvent) -> Vec<UIEvent> {
+    fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
         Vec::new()
     }
 

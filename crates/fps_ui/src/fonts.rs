@@ -16,7 +16,7 @@ pub struct CachedGlyph {
 }
 
 // Key for the cache: (GlyphId, font_size_u32)
-type CacheKey = (GlyphId, u32);
+type CacheKey = (GlyphId, u32, Color);
 
 #[derive(Debug)]
 pub struct FontManager {
@@ -95,7 +95,7 @@ impl FontManager {
             }
             
             // 2. Cache Lookup/Generation (The optimization happens here)
-            let cache_key = (current_glyph_id, key_size);
+            let cache_key = (current_glyph_id, key_size, color);
             let cached_glyph = self.cache.entry(cache_key).or_insert_with(|| {
                 // Cache miss: Generate the data using the immutable helper
                 rasterize_glyph_data(font_arc, scale, current_glyph_id, color)
@@ -133,6 +133,33 @@ impl FontManager {
             previous_glyph_id = Some(current_glyph_id);
         }
     }
+
+    /// Measures the total pixel width of a string for a given font size and scale.
+    pub fn measure_text_width(&self, text: &str, size_pixels: f32, global_scale: f32) -> f64 {
+        let font_arc = &self.font;
+        let scale = self.calculate_scale(size_pixels, global_scale);
+        let scaled_font = font_arc.as_scaled(scale);
+        
+        let mut total_width = 0.0;
+        let fallback_advance = scaled_font.height() * 0.5;
+        let mut previous_glyph_id = None;
+        
+        for current_char in text.chars() {
+            let current_glyph_id = font_arc.glyph_id(current_char);
+            
+            // 1. Kerning
+            if let Some(prev_id) = previous_glyph_id {
+                total_width += scaled_font.kern(prev_id, current_glyph_id);
+            }
+            
+            // 2. Advance (The scaled font handles the advance for a space character)
+            let advance = scaled_font.h_advance(current_glyph_id);
+            total_width += advance.max(fallback_advance);
+            previous_glyph_id = Some(current_glyph_id);
+        }
+        total_width as f64
+    }
+    
 }
 
 /// Performs expensive layout and rasterization for a single glyph and caches the result.

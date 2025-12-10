@@ -40,7 +40,7 @@ impl<'a> AppDriver<'a> {
     /// Draws the UI state onto the frame buffer and presents it to the screen.
     pub fn render(&mut self, manager: &mut UIManager, context: &mut UIMainContext) -> Result<(), pixels::Error> {
         let frame = self.pixels.frame_mut();
-        manager.draw(frame, context, self.width, self.height);
+        manager.draw(frame, context);
         self.pixels.render()?;
         Ok(())
     }

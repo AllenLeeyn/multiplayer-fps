@@ -1,17 +1,18 @@
 use std::fmt::Debug;
-use crate::geometry::Bounds;
 
 // --- Abstract Types ---
 use super::super::{
+    Bounds,
     UIMainContext,
     ComponentUpdate,
     UIEvent,
-    UIInputEvent,
-    LayoutMetrics
+    LayoutMetrics,
+    WindowEvent
 };
 
 /// Defines the mandatory contract for all UI elements.
-pub trait Component: Send + Sync + Debug {// Identification
+pub trait Component: Send + Sync + Debug {
+    // Identification
     fn id(&self) -> &str;
     
     // Geometry
@@ -21,7 +22,7 @@ pub trait Component: Send + Sync + Debug {// Identification
     fn layout_metrics(&self) -> LayoutMetrics;
 
     // Logic/Interaction (returns application events)
-    fn handle_input(&mut self, event: &UIInputEvent) -> Vec<UIEvent>;
+    fn handle_input(&mut self, event: &WindowEvent) -> Vec<UIEvent>;
     
     // Data Synchronization (returns true if a visual change requires a redraw)
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool;
@@ -29,6 +30,12 @@ pub trait Component: Send + Sync + Debug {// Identification
     // Redraw Optimization (NEW: Signals if component visual state changed since last frame)
     fn requires_redraw(&mut self) -> bool;
     
+    // Focus Management (NEW: Consistent way to manage focus state)
+    fn set_focus(&mut self, is_focused: bool) -> bool {
+        // Default implementation uses apply_update for state change and redraw signaling
+        self.apply_update(&ComponentUpdate::SetFocus(self.id().to_string(), is_focused))
+    }
+
     // Rendering
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32);
 }
