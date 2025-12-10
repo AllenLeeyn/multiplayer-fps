@@ -161,7 +161,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new()?;
 
     // Initialize UI Context and Manager (no lifetime issues here)
-    let ui_context = UIMainContext::new("assets/fonts/VCR_OSD_MONO_1.001.ttf")?;
+    let ui_context = UIMainContext::new("assets/fonts/Symtext.ttf")?;
     let mut ui_manager = UIManager::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let full_bounds = Rect::new(0.0, 0.0, WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     

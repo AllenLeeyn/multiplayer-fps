@@ -194,23 +194,19 @@ pub fn rasterize_glyph_data(
 
     // RASTERIZATION (Anti-Aliased)
     outlined_glyph.draw(|rel_x, rel_y, alpha| {
-        // Only process pixels with non-zero coverage
-        if alpha > 0.0 {
-            
-            // 1. Calculate buffer coordinates using the fractional offset
-            let x = rel_x as usize; 
-            let y = rel_y as usize;
+        // 1. Calculate buffer coordinates using the fractional offset
+        let x = rel_x as usize; 
+        let y = rel_y as usize;
 
-            let offset = (y * buffer_width as usize + x) * BPP;
-            
-            if offset + 3 < pixels.len() {
+        let offset = (y * buffer_width as usize + x) * BPP;
+        
+        if offset + 3 < pixels.len() {
 
-                // Set the color and the calculated alpha (A-A)
-                pixels[offset]     = color.r;
-                pixels[offset + 1] = color.g;
-                pixels[offset + 2] = color.b;
-                pixels[offset + 3] = (alpha * 255.0) as u8; // Use scaled alpha
-            }
+            // Set the color and the calculated alpha (A-A)
+            pixels[offset]     = color.r;
+            pixels[offset + 1] = color.g;
+            pixels[offset + 2] = color.b;
+            pixels[offset + 3] = (alpha * 255.0) as u8; // Use scaled alpha
         }
     });
 

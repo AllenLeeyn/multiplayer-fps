@@ -124,7 +124,7 @@ impl Component for TextInput {
                             for c in text_to_insert.chars() {
                                 // Filter out control characters (like Enter, Tab, etc.) 
                                 // as they should be handled by the physical key below.
-                                if !c.is_control() {
+                                if c.is_ascii() && !c.is_control() {
                                     self.text.insert(self.cursor_index, c);
                                     self.cursor_index += 1;
                                     self.cursor_visible = true;
