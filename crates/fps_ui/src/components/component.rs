@@ -36,6 +36,12 @@ pub trait Component: Send + Sync + Debug {
         self.apply_update(&ComponentUpdate::SetFocus(self.id().to_string(), is_focused))
     }
 
+    fn set_hovered(&mut self, is_hovered: bool) -> bool {
+        // Default implementation uses apply_update for state change and redraw signaling
+        self.apply_update(&ComponentUpdate::SetHovered(self.id().to_string(), is_hovered))
+    }
+
     // Rendering
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32);
+    
 }

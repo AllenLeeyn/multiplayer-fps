@@ -18,6 +18,7 @@ pub enum ComponentUpdate {
     SetLayerVisibility(String, bool),   // (Layer ID, Is Visible)
     SetPosition(String, f64, f64),      // (Component ID, New X, New Y)
     Resize {width: f64, height: f64},
+    SetHovered(String, bool),
     SetFocus(String, bool),
 }
 
@@ -29,7 +30,8 @@ impl ComponentUpdate {
             ComponentUpdate::SetText(id, _) |
             ComponentUpdate::SetValue(id, _) |
             ComponentUpdate::SetPosition(id, _, _) |
-            ComponentUpdate::SetFocus(id, _) => Some(id),
+            ComponentUpdate::SetFocus(id, _) |
+            ComponentUpdate::SetHovered(id, _) => Some(id),
             
             // These variants target layers or are global, and should be handled separately
             ComponentUpdate::SetLayerVisibility(_, _) |

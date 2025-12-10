@@ -13,7 +13,7 @@ use fps_ui::{
     layers::UIManager,
     Color,
     components::panel::{Panel, RenderSource},
-    components::{Label, FpsComponent, TextInput},
+    components::{Label, FpsComponent, TextInput, Button},
     events::{ComponentUpdate},
     geometry::Rect,
     layers::UILayer,
@@ -225,6 +225,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         Color::WHITE,
         Color::DARK_GRAY
     );
+
+    // Position it slightly below the text input, centered with it.
+    let button_bounds = Rect::new(0.11, 0.60 + 0.05, 150.0, 40.0); // x=11%, y=65%
+    let connect_button = Button::new(
+        "connect_button", // ID to check for in UIEvent::Clicked
+        "CONNECT",        // Button text
+        button_bounds,
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            position_mode: LengthMode::Percentage,
+            size_mode: LengthMode::AbsolutePixels,
+        },
+        Color::WHITE,
+        Color::BLACK,
+        Color::DARK_GRAY,
+    );
     
     // FpsComponent
     let fps_bounds = Rect::new(10.0, 10.0, 150.0, 32.0); // Top-left corner, slightly offset
@@ -249,6 +265,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Box::new(title2_label),
             Box::new(title_label),
             Box::new(text_input),
+            Box::new(connect_button),
             Box::new(fps_component),
         ],
     };

@@ -177,11 +177,35 @@ impl UIManager {
     }
 
     /// Handles CursorMoved events, managing hover state and routing the event.
-    fn handle_cursor_movement(&mut self, x: f64, y: f64) -> Vec<UIEvent> {
-        // Find the top-most component at (x, y)
-        let hit_target_id = self.hit_test_component(x, y);
+    pub fn handle_cursor_movement(&mut self, x: f64, y: f64) -> Vec<UIEvent> {
+        // 1. Find the top-most component at (x, y)
+        let new_hover_id = self.hit_test_component(x, y);
         self.last_cursor_position = (x, y);
-        self.hovered_component_id = hit_target_id;
+
+        // 2. Check if the hovered component has changed
+        if self.hovered_component_id.as_ref() != new_hover_id.as_ref() {
+            
+            // --- A. UNHOVER the old component (if one existed) ---
+            if let Some(old_id) = self.hovered_component_id.take() {
+                if let Some(comp) = self.find_component_by_id_mut(&old_id) {
+                    // Call the trait method. This should generate a ComponentUpdate::SetHovered
+                    // which the component will process in its apply_update.
+                    if comp.set_hovered(false) {
+                    }
+                }
+            }
+    
+            // --- B. HOVER the new component (if one was found) ---
+            if let Some(new_id) = new_hover_id.clone() {
+                self.hovered_component_id = Some(new_id.clone());
+                if let Some(comp) = self.find_component_by_id_mut(&new_id) {
+                    // Call the trait method to set the new hover state.
+                    if comp.set_hovered(true) {
+                    }
+                }
+            }
+        }
+
         Vec::new()
     }
 
