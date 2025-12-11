@@ -1,10 +1,10 @@
-use pixels::{Pixels, SurfaceTexture, Error};
+use pixels::{Error, Pixels, SurfaceTexture};
 use winit::window::Window;
 
 use crate::context::UIMainContext;
 use crate::layers::UIManager; // <-- IMPORT UIManager from layers.rs
 
-/// The AppDriver (now UIRenderer) manages the Pixels rendering surface 
+/// The AppDriver (now UIRenderer) manages the Pixels rendering surface
 /// and handles low-level window events like resizing.
 pub struct AppDriver<'a> {
     pixels: Pixels<'a>,
@@ -22,13 +22,17 @@ impl<'a> AppDriver<'a> {
         let surface_texture = SurfaceTexture::new(width, height, window);
         let pixels = Pixels::new(width, height, surface_texture)?;
 
-        Ok(Self { pixels, width, height })
+        Ok(Self {
+            pixels,
+            width,
+            height,
+        })
     }
 
     /// Handles low-level Winit events that affect the rendering surface.
     pub fn handle_winit_event(&mut self, event: &winit::event::WindowEvent) {
         use winit::event::WindowEvent;
-        
+
         if let WindowEvent::Resized(size) = event {
             self.width = size.width;
             self.height = size.height;
@@ -38,7 +42,11 @@ impl<'a> AppDriver<'a> {
     }
 
     /// Draws the UI state onto the frame buffer and presents it to the screen.
-    pub fn render(&mut self, manager: &mut UIManager, context: &mut UIMainContext) -> Result<(), pixels::Error> {
+    pub fn render(
+        &mut self,
+        manager: &mut UIManager,
+        context: &mut UIMainContext,
+    ) -> Result<(), pixels::Error> {
         let frame = self.pixels.frame_mut();
         manager.draw(frame, context);
         self.pixels.render()?;
@@ -48,5 +56,4 @@ impl<'a> AppDriver<'a> {
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
     }
-
 }

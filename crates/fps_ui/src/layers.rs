@@ -1,13 +1,7 @@
 use std::collections::HashMap;
 
 use super::{
-    UIMainContext,
-    Component,
-    ComponentUpdate,
-    UIEvent,
-    WindowEvent,
-    ElementState,
-    MouseButton
+    Component, ComponentUpdate, ElementState, MouseButton, UIEvent, UIMainContext, WindowEvent,
 };
 
 /// A container for UI components that shares a common Z-order and visibility state.
@@ -56,20 +50,18 @@ impl UIManager {
 
         match input_event {
             // High-priority text and key routing to the focused component
-            KeyboardInput { .. }  => {
-                self.handle_keyboard_input(input_event)
-            },
+            KeyboardInput { .. } => self.handle_keyboard_input(input_event),
 
             // Mouse movement and hover
             WindowEvent::CursorMoved { position, .. } => {
                 self.handle_cursor_movement(position.x, position.y)
-            },
-            
+            }
+
             // Mouse button for focus change and click routing
             MouseInput { state, button, .. } => {
                 let (x, y) = self.last_cursor_position;
                 self.handle_mouse_button(x, y, state, button, input_event)
-            },
+            }
 
             // Ignore other input types for now (e.g., MouseWheel, Touch)
             _ => Vec::new(),
@@ -82,17 +74,15 @@ impl UIManager {
         let mut needs_redraw = false;
 
         for update in updates {
-            
             // 1. Check for Component Updates
-            if let Some(target_id) = update.get_target_id() { 
+            if let Some(target_id) = update.get_target_id() {
                 if let Some(component) = self.find_component_by_id_mut(target_id) {
                     // component.apply_update now correctly returns a bool
-                    if component.apply_update(&update) { 
+                    if component.apply_update(&update) {
                         needs_redraw = true;
                     }
                 }
-            } 
-            
+            }
             // 2. Check for Layer Updates (SetLayerVisibility)
             else if let Some(layer_id) = update.get_layer_id() {
                 if let Some(layer) = self.layers.get_mut(layer_id) {
@@ -114,7 +104,7 @@ impl UIManager {
 
         for layer in sorted_layers.iter_mut().filter(|l| l.is_visible) {
             for component in layer.components.iter_mut() {
-                    component.draw(frame, context, self.width as u32, self.height as u32);
+                component.draw(frame, context, self.width as u32, self.height as u32);
             }
         }
     }
@@ -143,14 +133,14 @@ impl UIManager {
             for component in layer.components.iter().rev() {
                 let bounds = component.bounds();
                 let layout = component.layout_metrics();
-                
+
                 let abs_rect = crate::geometry::calculate_absolute_rect(
-                    &layout, 
-                    &bounds, 
-                    self.width, 
+                    &layout,
+                    &bounds,
+                    self.width,
                     self.height,
                 );
-                
+
                 // Use Rect/Bounds contains method from geometry.rs
                 if abs_rect.contains(x, y) {
                     return Some(component.id().to_string());
@@ -163,7 +153,7 @@ impl UIManager {
     /// Handles all KeyboardInput and ReceivedCharacter events by routing to the focused component.
     fn handle_keyboard_input(&mut self, event: &WindowEvent) -> Vec<UIEvent> {
         let mut generated_events = Vec::new();
-        
+
         if let Some(focused_id) = &self.focused_component_id.clone() {
             if let Some(component) = self.find_component_by_id_mut(focused_id) {
                 generated_events.extend(component.handle_input(event));
@@ -172,7 +162,7 @@ impl UIManager {
                 self.focused_component_id = None;
             }
         }
-        
+
         generated_events
     }
 
@@ -184,24 +174,18 @@ impl UIManager {
 
         // 2. Check if the hovered component has changed
         if self.hovered_component_id.as_ref() != new_hover_id.as_ref() {
-            
             // --- A. UNHOVER the old component (if one existed) ---
             if let Some(old_id) = self.hovered_component_id.take() {
                 if let Some(comp) = self.find_component_by_id_mut(&old_id) {
-                    // Call the trait method. This should generate a ComponentUpdate::SetHovered
-                    // which the component will process in its apply_update.
-                    if comp.set_hovered(false) {
-                    }
+                    if comp.set_hovered(false) {}
                 }
             }
-    
+
             // --- B. HOVER the new component (if one was found) ---
             if let Some(new_id) = new_hover_id.clone() {
                 self.hovered_component_id = Some(new_id.clone());
                 if let Some(comp) = self.find_component_by_id_mut(&new_id) {
-                    // Call the trait method to set the new hover state.
-                    if comp.set_hovered(true) {
-                    }
+                    if comp.set_hovered(true) {}
                 }
             }
         }
@@ -210,7 +194,14 @@ impl UIManager {
     }
 
     /// Handles MouseButton events, managing focus and routing the click.
-    fn handle_mouse_button(&mut self, x: f64, y: f64, _state: &ElementState, button: &MouseButton, raw_event:&WindowEvent ) -> Vec<UIEvent> {
+    fn handle_mouse_button(
+        &mut self,
+        x: f64,
+        y: f64,
+        _state: &ElementState,
+        button: &MouseButton,
+        raw_event: &WindowEvent,
+    ) -> Vec<UIEvent> {
         let mut generated_events = Vec::new();
 
         println!("click on {} {}", x, y);
@@ -224,10 +215,10 @@ impl UIManager {
                         old_component.set_focus(false);
                     }
                 }
-                
+
                 // Focus new
                 if let Some(new_id) = hit_target_id.clone() {
-                    self.focused_component_id = Some(new_id.clone()); 
+                    self.focused_component_id = Some(new_id.clone());
                     if let Some(new_component) = self.find_component_by_id_mut(&new_id) {
                         new_component.set_focus(true);
                     }
@@ -244,7 +235,7 @@ impl UIManager {
                 }
             }
         }
-        
+
         generated_events
     }
 }

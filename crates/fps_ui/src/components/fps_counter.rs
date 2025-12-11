@@ -1,13 +1,6 @@
 use super::super::{
-    Color,
-    Bounds,
+    Bounds, Color, Component, ComponentUpdate, LayoutMetrics, UIEvent, UIMainContext, WindowEvent,
     calculate_absolute_rect,
-    UIMainContext,
-    Component,
-    ComponentUpdate,
-    UIEvent,
-    LayoutMetrics,
-    WindowEvent
 };
 
 /// A specialized component that displays the current Frames Per Second (FPS).
@@ -18,7 +11,7 @@ pub struct FpsComponent {
     pub layout_metrics: LayoutMetrics,
     pub font_size: f32,
     pub color: Color,
-    
+
     // FpsComponent specific fields
     current_fps: u32,
     text: String,
@@ -35,7 +28,7 @@ impl FpsComponent {
     ) -> Self {
         let initial_fps = 0;
         let initial_text = format!("FPS: {}", initial_fps);
-        
+
         Self {
             id,
             bounds: relative_bounds,
@@ -48,8 +41,6 @@ impl FpsComponent {
         }
     }
 
-    /// Updates the internal FPS value and refreshes the displayed text.
-    /// Returns true if the text changed (requiring a redraw).
     pub fn update_fps(&mut self, new_fps: u32) -> bool {
         if self.current_fps != new_fps {
             self.current_fps = new_fps;
@@ -74,7 +65,7 @@ impl Component for FpsComponent {
     fn layout_metrics(&self) -> LayoutMetrics {
         self.layout_metrics
     }
-    
+
     fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
         Vec::new()
     }
@@ -83,9 +74,8 @@ impl Component for FpsComponent {
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool {
         match update {
             ComponentUpdate::SetValue(id, new_value) if id == self.id() => {
-                // The UIManager has correctly routed a SetValue update for this component.
                 let new_fps = new_value.round() as u32;
-                self.update_fps(new_fps) // Update FPS and return true if text changed
+                self.update_fps(new_fps)
             }
             _ => false,
         }
@@ -95,12 +85,16 @@ impl Component for FpsComponent {
         std::mem::take(&mut self.needs_redraw)
     }
 
-    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32) {
-        
+    fn draw(
+        &self,
+        frame: &mut [u8],
+        context: &mut UIMainContext,
+        screen_width: u32,
+        screen_height: u32,
+    ) {
         let screen_w_f64 = screen_width as f64;
         let screen_h_f64 = screen_height as f64;
 
-        // Calculate final absolute position
         let absolute_rect = calculate_absolute_rect(
             &self.layout_metrics,
             &self.bounds,
@@ -109,15 +103,15 @@ impl Component for FpsComponent {
         );
 
         context.font_manager.draw_text(
-            frame, 
-            &self.text, // Use the dynamically updated text string
-            self.font_size, 
-            self.color, 
-            absolute_rect.x, 
-            absolute_rect.y, 
-            context.global_scale_factor, 
-            screen_width, 
-            screen_height
+            frame,
+            &self.text,
+            self.font_size,
+            self.color,
+            absolute_rect.x,
+            absolute_rect.y,
+            context.global_scale_factor,
+            screen_width,
+            screen_height,
         );
     }
 

@@ -1,27 +1,27 @@
 pub mod components;
 pub mod context;
+pub mod driver;
 pub mod events;
 pub mod fonts;
 pub mod geometry;
-pub mod driver;
 pub mod layers;
 pub mod layout;
 
+pub use components::Component;
 pub use context::UIMainContext;
-pub use geometry::{Rect, Bounds, calculate_absolute_rect, IntRect};
 pub use driver::AppDriver;
 pub use events::{ComponentUpdate, UIEvent};
+pub use geometry::{Bounds, IntRect, Rect, calculate_absolute_rect};
 pub use layout::{AnchorPoint, LayoutMetrics, LengthMode};
-pub use components::Component;
 
+pub use winit::event::WindowEvent::KeyboardInput;
 pub use winit::event::{
-    WindowEvent,    // The main event enum
-    ElementState,   // Pressed or Released
-    MouseButton,    // Left, Right, Middle, etc.
-    // You can add more like VirtualKeyCode, DeviceEvent, etc., as needed
+    ElementState, // Pressed or Released
+    MouseButton,  // Left, Right, Middle, etc.
+                  // You can add more like VirtualKeyCode, DeviceEvent, etc., as needed
+    WindowEvent, // The main event enum
 };
 pub use winit::keyboard::{KeyCode, PhysicalKey};
-pub use winit::event::WindowEvent::KeyboardInput;
 
 /// Represents a simple RGB color with 8-bit channels.
 /// Used universally across UI components and rendering logic (u8 format).

@@ -1,12 +1,11 @@
-
 /// Defines the corner of the window the component's position is relative to.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AnchorPoint {
-    TopLeft,        // Default: (0, 0) is top-left
-    TopRight,       // (Screen_W, 0)
-    BottomLeft,     // (0, Screen_H)
-    BottomRight,    // (Screen_W, Screen_H)
-    Center,         // (Screen_W / 2, Screen_H / 2)
+    TopLeft,     // Default: (0, 0) is top-left
+    TopRight,    // (Screen_W, 0)
+    BottomLeft,  // (0, Screen_H)
+    BottomRight, // (Screen_W, Screen_H)
+    Center,      // (Screen_W / 2, Screen_H / 2)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

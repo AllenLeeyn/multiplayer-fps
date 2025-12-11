@@ -31,7 +31,7 @@ impl UIMainContext {
         self.image_cache.get(path).map(|v| v.as_slice())
     }
 
-    /// Adds new image data to the cache. This method would be called by the 
+    /// Adds new image data to the cache. This method would be called by the
     /// Application layer during initialization or loading screens.
     pub fn add_image(&mut self, path: String, data: Vec<u8>) {
         // NOTE: In a real system, you'd also store width/height metadata.

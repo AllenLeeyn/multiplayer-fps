@@ -112,7 +112,10 @@ pub fn calculate_absolute_rect(
     // 1. Calculate Width (W) and Height (H)
     let (abs_w, abs_h) = match metric.size_mode {
         LengthMode::AbsolutePixels => (relative_rect.w, relative_rect.h),
-        LengthMode::Percentage => (relative_rect.w * screen_width, relative_rect.h * screen_height),
+        LengthMode::Percentage => (
+            relative_rect.w * screen_width,
+            relative_rect.h * screen_height,
+        ),
     };
 
     // 2. Calculate Anchor Offset (AX, AY)
@@ -127,27 +130,32 @@ pub fn calculate_absolute_rect(
     // 3. Calculate Relative Position (RX, RY) - UPDATED
     let (rel_x, rel_y) = match metric.position_mode {
         LengthMode::AbsolutePixels => (relative_rect.x, relative_rect.y),
-        LengthMode::Percentage => (relative_rect.x * screen_width, relative_rect.y * screen_height),
+        LengthMode::Percentage => (
+            relative_rect.x * screen_width,
+            relative_rect.y * screen_height,
+        ),
     };
-    
+
     // 4. Final X and Y Position
-    let final_x = anchor_x + rel_x - (match metric.anchor {
-        // If anchored right, shift left by the component's width
-        AnchorPoint::TopRight | AnchorPoint::BottomRight => abs_w,
-        // If anchored center, shift left by half the component's width
-        AnchorPoint::Center => abs_w / 2.0,
-        // Otherwise (TopLeft, BottomLeft), no horizontal shift needed
-        _ => 0.0,
-    });
-    
-    let final_y = anchor_y + rel_y - (match metric.anchor {
-        // If anchored bottom, shift up by the component's height
-        AnchorPoint::BottomLeft | AnchorPoint::BottomRight => abs_h,
-        // If anchored center, shift up by half the component's height
-        AnchorPoint::Center => abs_h / 2.0,
-        // Otherwise (TopLeft, TopRight), no vertical shift needed
-        _ => 0.0,
-    });
+    let final_x = anchor_x + rel_x
+        - (match metric.anchor {
+            // If anchored right, shift left by the component's width
+            AnchorPoint::TopRight | AnchorPoint::BottomRight => abs_w,
+            // If anchored center, shift left by half the component's width
+            AnchorPoint::Center => abs_w / 2.0,
+            // Otherwise (TopLeft, BottomLeft), no horizontal shift needed
+            _ => 0.0,
+        });
+
+    let final_y = anchor_y + rel_y
+        - (match metric.anchor {
+            // If anchored bottom, shift up by the component's height
+            AnchorPoint::BottomLeft | AnchorPoint::BottomRight => abs_h,
+            // If anchored center, shift up by half the component's height
+            AnchorPoint::Center => abs_h / 2.0,
+            // Otherwise (TopLeft, TopRight), no vertical shift needed
+            _ => 0.0,
+        });
 
     Rect::new_rounded(final_x, final_y, abs_w, abs_h, relative_rect.radius)
 }
