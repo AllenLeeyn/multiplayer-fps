@@ -185,4 +185,8 @@ impl Component for Panel {
             false
         }
     }
+
+    fn get_text(&self) -> &str {
+        &self.id
+    }
 }

@@ -43,5 +43,6 @@ pub trait Component: Send + Sync + Debug {
 
     // Rendering
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext, screen_width: u32, screen_height: u32);
-    
+
+    fn get_text(&self) -> &str;
 }

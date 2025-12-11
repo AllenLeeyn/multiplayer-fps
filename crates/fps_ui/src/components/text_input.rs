@@ -70,6 +70,9 @@ impl TextInput {
             self.text.as_str()
         }
     }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 impl Component for TextInput {
@@ -322,5 +325,9 @@ impl Component for TextInput {
                 }
             }
         }
+    }
+
+    fn get_text(&self) -> &str {
+        &self.text
     }
 }

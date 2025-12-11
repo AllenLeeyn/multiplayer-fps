@@ -21,7 +21,7 @@ pub struct FpsComponent {
     
     // FpsComponent specific fields
     current_fps: u32,
-    text: String, // The string being displayed (e.g., "FPS: 60")
+    text: String,
     needs_redraw: bool,
 }
 
@@ -119,5 +119,9 @@ impl Component for FpsComponent {
             screen_width, 
             screen_height
         );
+    }
+
+    fn get_text(&self) -> &str {
+        &self.text
     }
 }

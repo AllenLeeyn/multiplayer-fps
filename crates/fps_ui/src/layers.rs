@@ -122,7 +122,7 @@ impl UIManager {
     // --- Internal Helpers ---
 
     /// Helper to find a mutable reference to a component by its ID.
-    fn find_component_by_id_mut(&mut self, id: &str) -> Option<&mut Box<dyn Component>> {
+    pub fn find_component_by_id_mut(&mut self, id: &str) -> Option<&mut Box<dyn Component>> {
         for layer in self.layers.values_mut() {
             if let Some(component) = layer.components.iter_mut().find(|c| c.id() == id) {
                 return Some(component);
@@ -210,11 +210,11 @@ impl UIManager {
     }
 
     /// Handles MouseButton events, managing focus and routing the click.
-    fn handle_mouse_button(&mut self, x: f64, y: f64, state: &ElementState, button: &MouseButton, raw_event:&WindowEvent ) -> Vec<UIEvent> {
+    fn handle_mouse_button(&mut self, x: f64, y: f64, _state: &ElementState, button: &MouseButton, raw_event:&WindowEvent ) -> Vec<UIEvent> {
         let mut generated_events = Vec::new();
 
         println!("click on {} {}", x, y);
-        if *state == ElementState::Pressed && *button == MouseButton::Left {
+        if *button == MouseButton::Left {
             let current_focus_id = self.focused_component_id.clone();
             let hit_target_id = self.hit_test_component(x, y);
 

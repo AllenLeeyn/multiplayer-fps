@@ -86,9 +86,9 @@ impl Component for Button {
         match event {
             WindowEvent::MouseInput { state, button, .. } => {
                 if *button == WinitMouseButton::Left {
+
                     let old_pressed = self.is_pressed;
                     
-                    println!("{} is pressed", self.id);
                     // The button must be hovered to be pressed
                     self.is_pressed = *state == WinitElementState::Pressed && self.is_hovered;
 
@@ -104,7 +104,7 @@ impl Component for Button {
             },
             _ => {}
         }
-
+        
         events
     }
 
@@ -201,5 +201,9 @@ impl Component for Button {
             screen_width,
             screen_height,
         );
+    }
+
+    fn get_text(&self) -> &str {
+        &self.text
     }
 }

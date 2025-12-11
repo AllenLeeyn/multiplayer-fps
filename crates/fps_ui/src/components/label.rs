@@ -121,4 +121,8 @@ impl Component for Label {
             screen_height
         );
     }
+
+    fn get_text(&self) -> &str {
+        &self.text
+    }
 }
