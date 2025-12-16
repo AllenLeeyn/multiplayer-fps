@@ -4,11 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+winit = "0.30.12"
+fps_ui = { path = "crates/fps_ui" }
+fps_config = { path = "crates/fps_config" }
 
 [workspace]
 members = [
     ".",
     "crates/fps_audio",
+    "crates/fps_config",
     "crates/fps_core",
     "crates/fps_levels",
     "crates/fps_net",
