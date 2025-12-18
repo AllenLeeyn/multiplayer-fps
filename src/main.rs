@@ -19,7 +19,7 @@ use fps_ui::{
 };
 
 use app::App;
-use view::ViewMainMenu;
+use view::{ViewMainMenu, ViewJoinMenu, ViewHostMenu, ViewLevelMenu};
 
 pub const PHYSICAL_WIDTH: u32 = 1600;
 pub const PHYSICAL_HEIGHT: u32 = 900;
@@ -53,9 +53,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let fps_component = FpsComponent::new(
         "fps_counter".to_string(),
-        24.0,
+        16.0,
         Color::YELLOW,
-        Rect::new(2.0, 2.0, 50.0, 24.0),
+        Rect::new(2.0, 2.0, 50.0, 20.0),
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
             positioning: LengthMode::Px,
@@ -77,9 +77,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // App + Views
     // -------------------------------------------------
     let main_menu_view = ViewMainMenu::new(config.username.clone());
+    let join_game_view = ViewJoinMenu::new();
+    let host_game_view = ViewHostMenu::new();
+    let host_level_view = ViewLevelMenu::new();
 
     let mut app = App {
-        window: None,
         driver: None,
         manager: ui_manager,
         views: HashMap::new(),
@@ -89,6 +91,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     app.register_view(Box::new(main_menu_view));
+    app.register_view(Box::new(join_game_view));
+    app.register_view(Box::new(host_game_view));
+    app.register_view(Box::new(host_level_view));
     app.activate_view("main_menu");
 
     event_loop.run_app(&mut app)?;

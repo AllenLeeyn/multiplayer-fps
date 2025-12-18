@@ -1,5 +1,7 @@
+use fps_config::Config;
 use fps_ui::{
     Color, UIEvent,
+    ComponentUpdate,
     components::{Button, Label, TextInput},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
@@ -64,7 +66,7 @@ impl View for ViewMainMenu {
 
         let input = TextInput::new(
             "username_input".to_string(),
-            Rect::new(0.11, 0.6, 400.0, 30.0),
+            Rect::new(0.11, 0.6, 300.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -77,10 +79,62 @@ impl View for ViewMainMenu {
             Color::DARK_GRAY,
         );
 
-        let connect = Button::new(
-            "connect_button",
-            "CONNECT",
-            Rect::new(0.11, 0.7, 160.0, 40.0),
+        let save_username = Button::new(
+            "save_username_button",
+            "SAVE",
+            Rect::new(0.49, 0.6, 160.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+        let join = Button::new(
+            "join_button",
+            "JOIN GAME",
+            Rect::new(0.11, 0.68, 200.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+        let host = Button::new(
+            "host_button",
+            "HOST GAME",
+            Rect::new(0.11, 0.75, 200.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+        let level = Button::new(
+            "level_button",
+            "LEVEL EDITOR",
+            Rect::new(0.11, 0.82, 200.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+        let quit = Button::new(
+            "quit_button",
+            "QUIT",
+            Rect::new(0.11, 0.89, 200.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -101,15 +155,35 @@ impl View for ViewMainMenu {
                 Box::new(title),
                 Box::new(username_label),
                 Box::new(input),
-                Box::new(connect),
+                Box::new(save_username),
+                Box::new(join),
+                Box::new(host),
+                Box::new(level),
+                Box::new(quit),
             ],
         }
     }
 
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
-            UIEvent::ButtonClicked(id) if id == "connect_button" => {
+            UIEvent::ButtonClicked(id) if id == "save_username_button" => {
                 vec![ViewAction::SaveUsername]
+            }
+
+            UIEvent::ButtonClicked(id) if id == "join_button" => {
+                vec![ViewAction::SwitchTo("join_menu".to_string())]
+            }
+
+            UIEvent::ButtonClicked(id) if id == "host_button" => {
+                vec![ViewAction::SwitchTo("host_menu".to_string())]
+            }
+
+            UIEvent::ButtonClicked(id) if id == "level_button" => {
+                vec![ViewAction::SwitchTo("level_menu".to_string())]
+            }
+
+            UIEvent::ButtonClicked(id) if id == "quit_button" => {
+                vec![ViewAction::QuitApp]
             }
 
             UIEvent::TextSubmitted(id, _value) if id == "username_input" => {
@@ -118,5 +192,17 @@ impl View for ViewMainMenu {
 
             _ => vec![],
         }
+    }
+    
+    fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
+        self.username = config.username.clone(); // sync internal state
+
+        vec![
+            ComponentUpdate::SetText(
+                "username_label".into(),
+                format!("Current user: {}", self.username),
+            ),
+            ComponentUpdate::SetText("username_input".into(), String::new()), // clear input
+        ]
     }
 }
