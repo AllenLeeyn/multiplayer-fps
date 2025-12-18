@@ -14,7 +14,10 @@ impl Config {
                 Self::default()
             }),
             Err(_) => {
-                println!("Config file not found at {:?}. Using default.", path.as_ref());
+                println!(
+                    "Config file not found at {:?}. Using default.",
+                    path.as_ref()
+                );
                 Self::default()
             }
         }
