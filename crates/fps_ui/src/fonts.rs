@@ -122,7 +122,7 @@ impl FontManager {
                     let frame_offset = (abs_y as usize * draw_width + abs_x as usize) * BPP;
 
                     // Direct opaque copy (fastest possible)
-                    if cached_glyph.pixels[cache_offset + 3] == 255 {
+                    if cached_glyph.pixels[cache_offset + 3] > 128 {
                         frame[frame_offset..frame_offset + BPP].copy_from_slice(
                             &cached_glyph.pixels[cache_offset..cache_offset + BPP],
                         );
