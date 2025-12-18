@@ -1,5 +1,5 @@
 use super::super::{
-    Bounds, Color, Component, ComponentUpdate, LayoutMetrics, UIEvent, UIMainContext, WindowEvent,
+    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
     calculate_absolute_rect,
 };
 
@@ -10,7 +10,7 @@ pub struct Label {
     text: String,
     font_size: f32,
     color: Color,
-    bounds: Bounds,
+    bounds: Rect,
     metrics: LayoutMetrics,
     needs_redraw: bool,
 }
@@ -21,7 +21,7 @@ impl Label {
         text: String,
         font_size: f32,
         color: Color,
-        bounds: Bounds,
+        bounds: Rect,
         metrics: LayoutMetrics,
     ) -> Self {
         Label {
@@ -41,7 +41,7 @@ impl Component for Label {
         &self.id
     }
 
-    fn bounds(&self) -> Bounds {
+    fn bounds(&self) -> Rect {
         self.bounds
     }
 
@@ -82,28 +82,13 @@ impl Component for Label {
         }
     }
 
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
-        // --- 1. Calculate Absolute Position and Size ---
-        let screen_w_f64 = screen_width as f64;
-        let screen_h_f64 = screen_height as f64;
-
-        let absolute_rect = calculate_absolute_rect(
-            &self.metrics,
-            &self.bounds,
-            screen_w_f64,
-            screen_h_f64,
-        );
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
+        let absolute_rect = calculate_absolute_rect(&self.metrics, &self.bounds, &context.layout);
 
         let start_x = absolute_rect.x;
         let start_y = absolute_rect.y;
+        let (logical_width, logical_height) = context.layout.size_as_u32();
 
-        // --- 2. Call the FontManager for Drawing ---
         context.font_manager.draw_text(
             frame,
             &self.text,
@@ -111,9 +96,8 @@ impl Component for Label {
             self.color,
             start_x,
             start_y,
-            context.global_scale_factor,
-            screen_width,
-            screen_height,
+            logical_width,
+            logical_height,
         );
     }
 

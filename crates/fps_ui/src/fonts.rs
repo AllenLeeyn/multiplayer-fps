@@ -11,11 +11,11 @@ pub struct CachedGlyph {
     pub pixels: Vec<u8>,
     pub width: u32,
     pub height: u32,
-    pub x_offset: i32, // Horizontal offset needed for correct drawing position
-    pub y_offset: i32, // Vertical offset
+    pub x_offset: i32,
+    pub y_offset: i32,
 }
 
-// Key for the cache: (GlyphId, font_size_u32)
+// Key for the cache: (GlyphId, font_size_u32, Color)
 type CacheKey = (GlyphId, u32, Color);
 
 #[derive(Debug)]
@@ -43,8 +43,8 @@ impl FontManager {
         &self.font
     }
 
-    pub fn calculate_scale(&self, size_pixels: f32, global_scale: f32) -> PxScale {
-        let scaled_size = size_pixels * global_scale;
+    pub fn calculate_scale(&self, size_pixels: f32) -> PxScale {
+        let scaled_size = size_pixels;
         PxScale {
             x: scaled_size,
             y: scaled_size,
@@ -61,15 +61,14 @@ impl FontManager {
         color: Color,
         start_x: f64,
         start_y: f64,
-        global_scale: f32,
-        screen_width: u32,
-        screen_height: u32,
+        logical_width: u32,
+        logical_height: u32,
     ) {
         let font_arc = &self.font;
-        let scale = self.calculate_scale(size_pixels, global_scale);
+        let scale = self.calculate_scale(size_pixels);
         let scaled_font = font_arc.as_scaled(scale);
 
-        let draw_width = screen_width as usize;
+        let draw_width = logical_width as usize;
         const BPP: usize = 4;
 
         let base_line = start_y as f32 + scaled_font.ascent();
@@ -85,7 +84,6 @@ impl FontManager {
             let current_glyph_id = font_arc.glyph_id(current_char);
 
             if current_char == ' ' {
-                // Space handling is necessary outside the cache
                 caret_x += scaled_font.line_gap().max(fallback_advance);
                 previous_glyph_id = None;
                 continue;
@@ -115,7 +113,7 @@ impl FontManager {
                     let abs_x = glyph_x + x;
                     let abs_y = glyph_y + y - size_pixels as u32;
 
-                    if abs_x >= screen_width || abs_y >= screen_height {
+                    if abs_x >= logical_width || abs_y >= logical_height {
                         continue;
                     }
 
@@ -140,9 +138,9 @@ impl FontManager {
     }
 
     /// Measures the total pixel width of a string for a given font size and scale.
-    pub fn measure_text_width(&self, text: &str, size_pixels: f32, global_scale: f32) -> f64 {
+    pub fn measure_text_width(&self, text: &str, size_pixels: f32) -> f64 {
         let font_arc = &self.font;
-        let scale = self.calculate_scale(size_pixels, global_scale);
+        let scale = self.calculate_scale(size_pixels);
         let scaled_font = font_arc.as_scaled(scale);
 
         let mut total_width = 0.0;

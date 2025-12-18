@@ -1,59 +1,99 @@
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::window::Window;
 
-use crate::context::UIMainContext;
-use crate::layers::UIManager; // <-- IMPORT UIManager from layers.rs
+use super::UIManager;
 
 /// The AppDriver (now UIRenderer) manages the Pixels rendering surface
 /// and handles low-level window events like resizing.
 pub struct AppDriver<'a> {
     pixels: Pixels<'a>,
-    width: u32,
-    height: u32,
+    logical_width: u32,
+    logical_height: u32,
+    scale_factor: f32,
+    logical_cursor: Option<(f64, f64)>,
 }
 
 impl<'a> AppDriver<'a> {
-    /// Creates a new AppDriver by initializing the Pixels renderer.
-    pub fn new(window: &'a Window) -> Result<Self, Error> {
-        let size = window.inner_size();
-        let width = size.width;
-        let height = size.height;
+    pub fn new(window: &'a Window, logical_width: u32, logical_height: u32) -> Result<Self, Error> {
+        let physical_size = window.inner_size();
+        let scale_factor = Self::compute_scale_factor(
+            logical_width,
+            logical_height,
+            physical_size.width,
+            physical_size.height,
+        );
 
-        let surface_texture = SurfaceTexture::new(width, height, window);
-        let pixels = Pixels::new(width, height, surface_texture)?;
+        let surface_texture =
+            SurfaceTexture::new(physical_size.width, physical_size.height, window);
+        let pixels = Pixels::new(logical_width, logical_height, surface_texture)?;
 
         Ok(Self {
             pixels,
-            width,
-            height,
+            logical_width,
+            logical_height,
+            scale_factor,
+            logical_cursor: None,
         })
     }
 
-    /// Handles low-level Winit events that affect the rendering surface.
+    /// Compute uniform scale factor from logical -> physical
+    fn compute_scale_factor(
+        logical_w: u32,
+        logical_h: u32,
+        physical_w: u32,
+        physical_h: u32,
+    ) -> f32 {
+        let scale_x = physical_w as f32 / logical_w as f32;
+        let scale_y = physical_h as f32 / logical_h as f32;
+        scale_x.min(scale_y)
+    }
+
+    /// Map logical coordinates to physical framebuffer coordinates
+    pub fn logical_to_physical(&self, lx: f64, ly: f64) -> (u32, u32) {
+        (
+            (lx * self.scale_factor as f64).round() as u32,
+            (ly * self.scale_factor as f64).round() as u32,
+        )
+    }
+
+    /// Map physical mouse coordinates to logical coordinates
+    pub fn physical_to_logical(&self, px: f64, py: f64) -> (f64, f64) {
+        (px / self.scale_factor as f64, py / self.scale_factor as f64)
+    }
+
+    /// Handle resizing events from winit
     pub fn handle_winit_event(&mut self, event: &winit::event::WindowEvent) {
         use winit::event::WindowEvent;
 
-        if let WindowEvent::Resized(size) = event {
-            self.width = size.width;
-            self.height = size.height;
-            self.pixels.resize_surface(size.width, size.height).unwrap();
-            self.pixels.resize_buffer(size.width, size.height).unwrap();
+        match event {
+            WindowEvent::Resized(size) => {
+                self.pixels.resize_surface(size.width, size.height).unwrap();
+
+                self.scale_factor = Self::compute_scale_factor(
+                    self.logical_width,
+                    self.logical_height,
+                    size.width,
+                    size.height,
+                );
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                let (lx, ly) = self.physical_to_logical(position.x, position.y);
+                self.logical_cursor = Some((lx, ly));
+            }
+
+            _ => {}
         }
     }
 
-    /// Draws the UI state onto the frame buffer and presents it to the screen.
-    pub fn render(
-        &mut self,
-        manager: &mut UIManager,
-        context: &mut UIMainContext,
-    ) -> Result<(), pixels::Error> {
+    pub fn render(&mut self, ui_manager: &mut UIManager) -> Result<(), Error> {
         let frame = self.pixels.frame_mut();
-        manager.draw(frame, context);
+        ui_manager.draw(frame);
         self.pixels.render()?;
         Ok(())
     }
 
-    pub fn dimensions(&self) -> (u32, u32) {
-        (self.width, self.height)
+    pub fn logical_cursor(&self) -> Option<(f64, f64)> {
+        self.logical_cursor
     }
 }

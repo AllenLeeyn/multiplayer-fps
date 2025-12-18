@@ -12,20 +12,22 @@ use fps_ui::{
     components::{Button, FpsComponent, Label, TextInput},
     events::ComponentUpdate,
     geometry::Rect,
-    layers::UILayer,
-    layers::UIManager,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
+    manager::Layer,
+    manager::UIManager,
 };
 
 const WINDOW_WIDTH: u32 = 1600;
 const WINDOW_HEIGHT: u32 = 900;
 
+const LOGICAL_WIDTH: u32 = 800;
+const LOGICAL_HEIGHT: u32 = 450;
+
 /// The central application struct that holds the necessary state.
 struct App<'a> {
     window: Option<Window>,
-    driver: Option<AppDriver<'a>>, // Carries the 'a lifetime
+    driver: Option<AppDriver<'a>>,
     manager: UIManager,
-    context: UIMainContext,
 
     last_fps_update: Instant,
     frame_count: u32,
@@ -52,7 +54,7 @@ impl<'a> ApplicationHandler for App<'a> {
             // This is safe because Winit ensures the Window lives as long as the event loop runs.
             let window_ref: &'a Window = unsafe { std::mem::transmute(&window) };
 
-            match AppDriver::new(window_ref) {
+            match AppDriver::new(window_ref, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
                 Ok(driver) => {
                     self.driver = Some(driver);
                     self.window = Some(window);
@@ -72,7 +74,7 @@ impl<'a> ApplicationHandler for App<'a> {
             None => return,
         };
 
-        let ui_events = self.manager.process_input(&event);
+        let ui_events = self.manager.process_input(&event, driver.logical_cursor());
         let mut update_username_label = |clear_input: bool| {
             let mut updates = Vec::new();
 
@@ -165,7 +167,7 @@ impl<'a> ApplicationHandler for App<'a> {
                 }
 
                 // 2. Render the UI
-                if let Err(e) = driver.render(&mut self.manager, &mut self.context) {
+                if let Err(e) = driver.render(&mut self.manager) {
                     eprintln!("Pixels error during render: {:?}", e);
                     event_loop.exit();
                 }
@@ -188,32 +190,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("--- Starting fps_ui Test Harness ---");
 
     let event_loop = EventLoop::new()?;
+    let ui_context = UIMainContext::new(
+        //<----- main.rs(194, 9): binding `ui_context` declared here
+        "assets/fonts/8-bit-pusab.ttf",
+        LOGICAL_WIDTH as f64,
+        LOGICAL_HEIGHT as f64,
+    )?;
+    let mut ui_manager = UIManager::new(ui_context); //<----- `ui_context` does not live long enough
+    let full_bounds = Rect::new(0.0, 0.0, LOGICAL_WIDTH as f64, LOGICAL_HEIGHT as f64);
 
-    let ui_context = UIMainContext::new("assets/fonts/Symtext.ttf")?;
-    let mut ui_manager = UIManager::new(WINDOW_WIDTH, WINDOW_HEIGHT);
-    let full_bounds = Rect::new(0.0, 0.0, WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
+    let background_panel = Panel::new(
+        "main_bg".to_string(),
+        RenderSource::SolidColor(Color::RED),
+        full_bounds,
+    );
 
-    let grid_function = RenderSource::Function(Box::new(|x, y| {
-        let aspect = WINDOW_WIDTH as f64 / WINDOW_HEIGHT as f64;
-        let x_corr = x * aspect;
-
-        let grid_cells = 20.0;
-
-
-        let fx = (x_corr * grid_cells) % 1.0;
-        let fy = (y * grid_cells) % 1.0;
-
-        let line_thickness = 0.05;
-        if fx < line_thickness || fy < line_thickness {
-            return Color::new(20, 20, 20, 255);
-        }
-
-        Color::new(222, 0, 0, 255)
-    }));
-
-    let background_panel = Panel::new("main_bg".to_string(), grid_function, full_bounds);
-
-    let background_layer = UILayer {
+    let background_layer = Layer {
         id: "background".to_string(),
         z_index: 0,
         is_visible: true,
@@ -228,72 +220,73 @@ fn main() -> Result<(), Box<dyn Error>> {
     // --- 2. Foreground Layer with Label ---
 
     // Define title label
-    let label_bounds = Rect::new(0.11, 0.115, 100.0, 50.0);
+    let label_bounds = Rect::new(0.11, 0.115, 1.0, 1.0);
     let title_label = Label::new(
         "title".to_string(),
         "aMAZE".to_string(),            // Initial text
-        360.0,                          // Font size in virtual pixels
+        180.0,                          // Font size in virtual pixels
         Color::new(255, 255, 255, 255), // White color
         label_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::Percentage,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Percent,
+            sizing: LengthMode::Percent,
         },
     );
-    let label2_bounds = Rect::new(0.115, 0.125, 100.0, 50.0); // x=20, y=20, max width=300, max height=50
+    let label2_bounds = Rect::new(0.115, 0.125, 1.0, 1.0); // x=20, y=20, max width=300, max height=50
     let title2_label = Label::new(
         "title2".to_string(),
         "aMAZE".to_string(),      // Initial text
-        360.0,                    // Font size in virtual pixels
+        180.0,                    // Font size in virtual pixels
         Color::new(0, 0, 0, 255), // White color
         label2_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::Percentage,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Percent,
+            sizing: LengthMode::Percent,
         },
     );
 
-    let text_input_bounds = Rect::new(0.11, 0.60, 400.0, 40.0);
+    let text_input_bounds = Rect::new(0.11, 0.6, 400.0, 40.0);
     let text_input = TextInput::new(
         "username_input".to_string(),
         text_input_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::Percentage,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Percent,
+            sizing: LengthMode::Px,
         },
         "Enter username....".to_string(),
         16,
+        30.0,
         Color::WHITE,
         Color::DARK_GRAY,
     );
 
-    let username_label_bounds = Rect::new(0.11, 0.55, 400.0, 40.0);
+    let username_label_bounds = Rect::new(0.11, 0.55, 400.0, 10.0);
     let username_label = Label::new(
         "username_label".to_string(),
         "set username here".to_string(),
-        36.0,
+        24.0,
         Color::WHITE,
         username_label_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::Percentage,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Percent,
+            sizing: LengthMode::Px,
         },
     );
 
     // Position it slightly below the text input, centered with it.
-    let button_bounds = Rect::new(0.11, 0.60 + 0.05, 150.0, 40.0); // x=11%, y=65%
+    let button_bounds = Rect::new(0.11, 0.7, 160.0, 40.0);
     let connect_button = Button::new(
         "connect_button", // ID to check for in UIEvent::Clicked
         "CONNECT",        // Button text
         button_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::Percentage,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Percent,
+            sizing: LengthMode::Px,
         },
         Color::WHITE,
         Color::BLACK,
@@ -301,20 +294,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     // FpsComponent
-    let fps_bounds = Rect::new(10.0, 10.0, 150.0, 32.0); // Top-left corner, slightly offset
+    let fps_bounds = Rect::new(2.0, 2.0, 50.0, 24.0);
     let fps_component = FpsComponent::new(
         "fps_counter".to_string(),    // Crucial ID for updates
-        32.0,                         // Font size
+        24.0,                         // Font size
         Color::new(255, 255, 0, 255), // Yellow color
         fps_bounds,
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
-            position_mode: LengthMode::AbsolutePixels,
-            size_mode: LengthMode::AbsolutePixels,
+            positioning: LengthMode::Px,
+            sizing: LengthMode::Px,
         },
     );
 
-    let foreground_layer = UILayer {
+    let foreground_layer = Layer {
         id: "foreground".to_string(),
         z_index: 10,
         is_visible: true,
@@ -335,11 +328,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // --- 3. App Initialization and Run (Unchanged) ---
     let now = Instant::now();
-    let mut app: App<'static> = App {
+    let mut app: App = App {
+        // <------ type annotation requires that `ui_context` is borrowed for `'static`
         window: None,
         driver: None,
         manager: ui_manager,
-        context: ui_context,
 
         // --- FPS Tracking Initialization ---
         last_fps_update: now, // Initialize the timer start

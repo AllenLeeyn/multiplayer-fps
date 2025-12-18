@@ -1,8 +1,7 @@
-use std::cmp::min;
 use std::fmt::{Debug, Formatter, Result};
 
 use super::super::{
-    Bounds, Color, Component, ComponentUpdate, LayoutMetrics, UIEvent, UIMainContext, WindowEvent,
+    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
 };
 
 /// Defines the source and type of rendering for the Panel component.
@@ -36,13 +35,13 @@ impl Debug for RenderSource {
 #[derive(Debug)]
 pub struct Panel {
     id: String,
-    bounds: Bounds,
+    bounds: Rect,
     source: RenderSource,
     needs_redraw: bool,
 }
 
 impl Panel {
-    pub fn new(id: String, source: RenderSource, bounds: Bounds) -> Self {
+    pub fn new(id: String, source: RenderSource, bounds: Rect) -> Self {
         Panel {
             id,
             bounds,
@@ -59,7 +58,7 @@ impl Component for Panel {
         &self.id
     }
 
-    fn bounds(&self) -> Bounds {
+    fn bounds(&self) -> Rect {
         self.bounds
     }
 
@@ -71,27 +70,16 @@ impl Component for Panel {
         Vec::new()
     }
 
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
         let start_x = self.bounds.x.round() as usize;
         let start_y = self.bounds.y.round() as usize;
 
-        let end_x = (self.bounds.x + self.bounds.w).round() as usize;
-        let end_y = (self.bounds.y + self.bounds.h).round() as usize;
-
-        let draw_width = screen_width as usize;
-
         const BYTES_PER_PIXEL: usize = 4;
 
-        let draw_start_x = start_x.max(0);
-        let draw_start_y = start_y.max(0);
-        let draw_end_x = min(end_x, screen_width as usize);
-        let draw_end_y = min(end_y, screen_height as usize);
+        let draw_start_x = 0;
+        let draw_start_y = 0;
+        let (draw_end_x, draw_end_y) = context.layout.size_as_usize();
+        let draw_width = draw_end_x;
 
         for y in draw_start_y..draw_end_y {
             for x in draw_start_x..draw_end_x {
@@ -154,7 +142,7 @@ impl Component for Panel {
             }
             ComponentUpdate::Resize { width, height } => {
                 // Bounds::new is inclusive, so it creates the new Rect (0.0, 0.0, width, height)
-                self.bounds = Bounds::new(0.0, 0.0, *width, *height);
+                self.bounds = Rect::new(0.0, 0.0, *width, *height);
                 self.needs_redraw = true;
                 true
             }

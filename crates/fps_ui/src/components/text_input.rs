@@ -1,22 +1,21 @@
 use ab_glyph::{Font, ScaleFont};
 
 use super::super::{
-    Bounds, Color, Component, ComponentUpdate, ElementState, IntRect, KeyCode, LayoutMetrics,
-    MouseButton, PhysicalKey, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
+    Color, Component, ComponentUpdate, ElementState, IntRect, KeyCode, LayoutMetrics, PhysicalKey,
+    Rect, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
 };
 
 /// A standard single-line text input field component.
 #[derive(Debug)]
 pub struct TextInput {
     id: String,
-    bounds: Bounds,
+    bounds: Rect,
     layout: LayoutMetrics,
 
     // State
     pub text: String,
     pub placeholder: String,
     pub max_input: usize,
-    // Note: Focus state is ultimately controlled by UIManager, but component needs to know.
     pub is_focused: bool,
     cursor_index: usize,
     cursor_visible: bool,
@@ -33,10 +32,11 @@ impl TextInput {
     /// Creates a new TextInput component.
     pub fn new(
         id: String,
-        bounds: Bounds,
+        bounds: Rect,
         layout: LayoutMetrics,
         placeholder: String,
         max_input: usize,
+        font_size: f32,
         color: Color,
         bg_color: Color,
     ) -> Self {
@@ -51,7 +51,7 @@ impl TextInput {
             cursor_index: 0,
             cursor_visible: true,
             redraw_required: true,
-            font_size: 30.0,
+            font_size: font_size,
             text_color: color,
             background_color: bg_color,
             focus_color: bg_color,
@@ -76,7 +76,7 @@ impl Component for TextInput {
         &self.id
     }
 
-    fn bounds(&self) -> Bounds {
+    fn bounds(&self) -> Rect {
         self.bounds
     }
 
@@ -163,19 +163,6 @@ impl Component for TextInput {
                 }
             }
 
-            // 3. Winit::MouseInput (for click-based focus handling)
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button,
-                ..
-            } => {
-                if *button == MouseButton::Left {
-                    self.cursor_index = self.text.len();
-                    self.cursor_visible = true;
-                    self.redraw_required = true;
-                }
-            }
-
             _ => {} // Ignore other input events
         }
 
@@ -209,23 +196,13 @@ impl Component for TextInput {
         }
     }
 
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
         const BPP: usize = 4;
-        let draw_width = screen_width as usize;
 
         // Use the geometry module to get the final screen bounds
-        let bounds_f64 = calculate_absolute_rect(
-            &self.layout,
-            &self.bounds,
-            screen_width as f64,
-            screen_height as f64,
-        );
+        let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
+        let (logical_width, logical_height) = context.layout.size_as_u32();
+        let draw_width = logical_width as usize;
 
         // Pixel-snap the bounds for drawing
         let abs_rect: IntRect = bounds_f64.to_int_rect();
@@ -251,7 +228,7 @@ impl Component for TextInput {
         // 2. Draw Background
         for y in abs_rect.y..(abs_rect.y + abs_rect.h as i32) {
             for x in abs_rect.x..(abs_rect.x + abs_rect.w as i32) {
-                if x >= 0 && x < screen_width as i32 && y >= 0 && y < screen_height as i32 {
+                if x >= 0 && x < logical_width as i32 && y >= 0 && y < logical_height as i32 {
                     let offset = (y as usize * draw_width + x as usize) * BPP;
 
                     frame[offset] = bg_color.r;
@@ -268,16 +245,14 @@ impl Component for TextInput {
 
         // Calculate baseline for vertical centering
         let (ascent, line_height) = {
-            let scale = context
-                .font_manager
-                .calculate_scale(self.font_size, context.global_scale_factor);
+            let scale = context.font_manager.calculate_scale(self.font_size);
 
             // This creates an immutable reference to the FontArc inside FontManager.
             let scaled_font = context.font_manager.get_primary_font().as_scaled(scale);
 
             // Extract the required f64 values immediately.
             let ascent = scaled_font.ascent() as f64;
-            let line_height = (scaled_font.height() as f64) * context.global_scale_factor as f64;
+            let line_height = scaled_font.height() as f64;
 
             // `scaled_font` drops here, releasing the immutable borrow.
             (ascent, line_height)
@@ -291,20 +266,17 @@ impl Component for TextInput {
             text_color,
             text_start_x,
             text_baseline_y,
-            context.global_scale_factor,
-            screen_width,
-            screen_height,
+            logical_width,
+            logical_height,
         );
 
         // 4. Draw Cursor (If focused and visible, and not drawing placeholder)
         if self.is_focused && self.cursor_visible && self.text_to_draw() == self.text.as_str() {
             // Measure the text up to the cursor index using the new FontManager method
             let text_before_cursor = &self.text[0..self.cursor_index];
-            let advance_x = context.font_manager.measure_text_width(
-                text_before_cursor,
-                self.font_size,
-                context.global_scale_factor,
-            );
+            let advance_x = context
+                .font_manager
+                .measure_text_width(text_before_cursor, self.font_size);
 
             // Cursor position
             let cursor_x = (text_start_x + advance_x) as i32;

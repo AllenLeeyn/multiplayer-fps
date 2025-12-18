@@ -1,5 +1,7 @@
+use std::time::{Duration, Instant};
+
 use super::super::{
-    Bounds, Color, Component, ComponentUpdate, LayoutMetrics, UIEvent, UIMainContext, WindowEvent,
+    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
     calculate_absolute_rect,
 };
 
@@ -7,7 +9,7 @@ use super::super::{
 #[derive(Debug, Clone)]
 pub struct FpsComponent {
     pub id: String,
-    pub bounds: Bounds,
+    pub bounds: Rect,
     pub layout_metrics: LayoutMetrics,
     pub font_size: f32,
     pub color: Color,
@@ -16,6 +18,8 @@ pub struct FpsComponent {
     current_fps: u32,
     text: String,
     needs_redraw: bool,
+    frame_count: u32,
+    last_update: Option<Instant>,
 }
 
 impl FpsComponent {
@@ -23,7 +27,7 @@ impl FpsComponent {
         id: String,
         font_size: f32,
         color: Color,
-        relative_bounds: Bounds,
+        relative_bounds: Rect,
         metrics: LayoutMetrics,
     ) -> Self {
         let initial_fps = 0;
@@ -38,6 +42,8 @@ impl FpsComponent {
             current_fps: initial_fps,
             text: initial_text,
             needs_redraw: true,
+            frame_count: 0,
+            last_update: None,
         }
     }
 
@@ -58,7 +64,7 @@ impl Component for FpsComponent {
         &self.id
     }
 
-    fn bounds(&self) -> Bounds {
+    fn bounds(&self) -> Rect {
         self.bounds
     }
 
@@ -71,36 +77,18 @@ impl Component for FpsComponent {
     }
 
     /// Handles incoming updates from the application layer.
-    fn apply_update(&mut self, update: &ComponentUpdate) -> bool {
-        match update {
-            ComponentUpdate::SetValue(id, new_value) if id == self.id() => {
-                let new_fps = new_value.round() as u32;
-                self.update_fps(new_fps)
-            }
-            _ => false,
-        }
+    fn apply_update(&mut self, _update: &ComponentUpdate) -> bool {
+        false
     }
 
     fn requires_redraw(&mut self) -> bool {
         std::mem::take(&mut self.needs_redraw)
     }
 
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
-        let screen_w_f64 = screen_width as f64;
-        let screen_h_f64 = screen_height as f64;
-
-        let absolute_rect = calculate_absolute_rect(
-            &self.layout_metrics,
-            &self.bounds,
-            screen_w_f64,
-            screen_h_f64,
-        );
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
+        let absolute_rect =
+            calculate_absolute_rect(&self.layout_metrics, &self.bounds, &context.layout);
+        let (logical_width, logical_height) = context.layout.size_as_u32();
 
         context.font_manager.draw_text(
             frame,
@@ -109,13 +97,33 @@ impl Component for FpsComponent {
             self.color,
             absolute_rect.x,
             absolute_rect.y,
-            context.global_scale_factor,
-            screen_width,
-            screen_height,
+            logical_width,
+            logical_height,
         );
     }
 
     fn get_text(&self) -> &str {
         &self.text
+    }
+
+    fn update(&mut self) {
+        let now = Instant::now();
+
+        if self.last_update.is_none() {
+            self.last_update = Some(now);
+            self.frame_count = 0;
+        }
+
+        self.frame_count += 1;
+
+        let last = self.last_update.unwrap();
+        let elapsed = now.duration_since(last);
+
+        if elapsed >= Duration::from_secs(1) {
+            let fps = ((self.frame_count as f32) / elapsed.as_secs_f32()).round() as u32;
+            self.frame_count = 0;
+            self.last_update = Some(now);
+            self.update_fps(fps);
+        }
     }
 }

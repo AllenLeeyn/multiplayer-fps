@@ -1,5 +1,5 @@
 use super::super::{
-    Bounds, Color, Component, ComponentUpdate, ElementState, IntRect, LayoutMetrics, MouseButton,
+    Color, Component, ComponentUpdate, ElementState, IntRect, LayoutMetrics, MouseButton, Rect,
     UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
 };
 use ab_glyph::{Font, ScaleFont};
@@ -8,7 +8,7 @@ use ab_glyph::{Font, ScaleFont};
 #[derive(Debug)]
 pub struct Button {
     id: String,
-    bounds: Bounds,
+    bounds: Rect,
     layout: LayoutMetrics,
 
     // Visual State
@@ -28,7 +28,7 @@ impl Button {
     pub fn new(
         id: &str,
         text: &str,
-        bounds: Bounds,
+        bounds: Rect,
         layout: LayoutMetrics,
         text_color: Color,
         background_color: Color,
@@ -64,7 +64,7 @@ impl Component for Button {
         &self.id
     }
 
-    fn bounds(&self) -> Bounds {
+    fn bounds(&self) -> Rect {
         self.bounds
     }
 
@@ -125,22 +125,12 @@ impl Component for Button {
         required
     }
 
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    ) {
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
         const BPP: usize = 4;
-        let draw_width = screen_width as usize;
 
-        let bounds_f64 = calculate_absolute_rect(
-            &self.layout,
-            &self.bounds,
-            screen_width as f64,
-            screen_height as f64,
-        );
+        let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
+        let (logical_width, logical_height) = context.layout.size_as_u32();
+        let draw_width = logical_width as usize;
 
         let abs_rect: IntRect = bounds_f64.to_int_rect();
         let bg_color = self.current_bg_color();
@@ -149,7 +139,7 @@ impl Component for Button {
         // 1. Draw Background
         for y in abs_rect.y..(abs_rect.y + abs_rect.h as i32) {
             for x in abs_rect.x..(abs_rect.x + abs_rect.w as i32) {
-                if x >= 0 && x < screen_width as i32 && y >= 0 && y < screen_height as i32 {
+                if x >= 0 && x < logical_width as i32 && y >= 0 && y < logical_height as i32 {
                     let offset = (y as usize * draw_width + x as usize) * BPP;
                     frame[offset] = bg_color.r;
                     frame[offset + 1] = bg_color.g;
@@ -163,13 +153,11 @@ impl Component for Button {
         let text_to_draw = self.text.as_str();
 
         let (scaled_ascent, scaled_descent) = {
-            let scale = context
-                .font_manager
-                .calculate_scale(self.font_size, context.global_scale_factor);
+            let scale = context.font_manager.calculate_scale(self.font_size);
             let scaled_font = context.font_manager.get_primary_font().as_scaled(scale);
 
-            let ascent = (scaled_font.ascent() * context.global_scale_factor) as f64;
-            let descent = (scaled_font.descent() * context.global_scale_factor) as f64;
+            let ascent = (scaled_font.ascent()) as f64;
+            let descent = (scaled_font.descent()) as f64;
             (ascent, descent)
         };
 
@@ -179,11 +167,9 @@ impl Component for Button {
         let text_baseline_y = component_center_y - font_center_offset;
 
         // Horizontal Centering:
-        let text_width = context.font_manager.measure_text_width(
-            text_to_draw,
-            self.font_size,
-            context.global_scale_factor,
-        );
+        let text_width = context
+            .font_manager
+            .measure_text_width(text_to_draw, self.font_size);
         let text_start_x = bounds_f64.x + (bounds_f64.w / 2.0) - (text_width / 2.0);
 
         context.font_manager.draw_text(
@@ -193,9 +179,8 @@ impl Component for Button {
             text_color,
             text_start_x,
             text_baseline_y,
-            context.global_scale_factor,
-            screen_width,
-            screen_height,
+            logical_width,
+            logical_height,
         );
     }
 

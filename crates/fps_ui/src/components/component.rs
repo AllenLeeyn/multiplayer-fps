@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 // --- Abstract Types ---
-use super::super::{Bounds, ComponentUpdate, LayoutMetrics, UIEvent, UIMainContext, WindowEvent};
+use super::super::{ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent};
 
 /// Defines the mandatory contract for all UI elements.
 pub trait Component: Send + Sync + Debug {
@@ -9,7 +9,7 @@ pub trait Component: Send + Sync + Debug {
     fn id(&self) -> &str;
 
     // Compoenent location and size parameter
-    fn bounds(&self) -> Bounds;
+    fn bounds(&self) -> Rect;
 
     // Compoenent location and size parameter meterics
     fn layout_metrics(&self) -> LayoutMetrics;
@@ -40,13 +40,9 @@ pub trait Component: Send + Sync + Debug {
     }
 
     // Rendering
-    fn draw(
-        &self,
-        frame: &mut [u8],
-        context: &mut UIMainContext,
-        screen_width: u32,
-        screen_height: u32,
-    );
+    fn draw(&self, frame: &mut [u8], context: &mut UIMainContext);
 
     fn get_text(&self) -> &str;
+
+    fn update(&mut self) {}
 }
