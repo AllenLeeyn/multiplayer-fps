@@ -1,9 +1,8 @@
 use std::error::Error;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::WindowId;
 
 // --- Imports from fps_ui library ---
 use fps_ui::{
@@ -24,9 +23,8 @@ const LOGICAL_WIDTH: u32 = 800;
 const LOGICAL_HEIGHT: u32 = 450;
 
 /// The central application struct that holds the necessary state.
-struct App<'a> {
-    window: Option<Window>,
-    driver: Option<AppDriver<'a>>,
+struct App {
+    driver: Option<AppDriver<'static>>,
     manager: UIManager,
 
     last_fps_update: Instant,
@@ -37,32 +35,18 @@ struct App<'a> {
 // --------------------------------------------------------------------------
 // This block implements the Winit behavior.
 // --------------------------------------------------------------------------
-impl<'a> ApplicationHandler for App<'a> {
+impl ApplicationHandler for App {
     /// Initializes the window and the AppDriver (Renderer).
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            println!("--- Initializing Window and UI Renderer ---");
+        println!("--- Initializing Window and UI Renderer ---");
 
-            let attrs = WindowAttributes::default()
-                .with_title("fps_ui Crate Test Window")
-                .with_inner_size(PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
-                .with_resizable(false);
-
-            let window = event_loop.create_window(attrs).unwrap();
-
-            // When creating the driver, we must coerce the window borrow to 'a.
-            // This is safe because Winit ensures the Window lives as long as the event loop runs.
-            let window_ref: &'a Window = unsafe { std::mem::transmute(&window) };
-
-            match AppDriver::new(window_ref, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
-                Ok(driver) => {
-                    self.driver = Some(driver);
-                    self.window = Some(window);
-                }
-                Err(e) => {
-                    eprintln!("FATAL: Failed to initialize AppDriver/Pixels: {}", e);
-                    event_loop.exit();
-                }
+        match AppDriver::new(event_loop, LOGICAL_WIDTH, LOGICAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT) {
+            Ok(driver) => {
+                self.driver = Some(driver);
+            }
+            Err(e) => {
+                eprintln!("FATAL: Failed to initialize AppDriver/Pixels: {}", e);
+                event_loop.exit();
             }
         }
     }
@@ -74,6 +58,7 @@ impl<'a> ApplicationHandler for App<'a> {
             None => return,
         };
 
+        self.manager.update_components();
         let ui_events = self.manager.process_input(&event, driver.logical_cursor());
         let mut update_username_label = |clear_input: bool| {
             let mut updates = Vec::new();
@@ -178,8 +163,8 @@ impl<'a> ApplicationHandler for App<'a> {
 
     /// Requests continuous redraws.
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = self.window.as_ref() {
-            window.request_redraw();
+        if let Some(driver) = self.driver.as_ref() {
+            driver.window().request_redraw();
         }
     }
 }
@@ -192,7 +177,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new()?;
     let ui_context = UIMainContext::new(
         //<----- main.rs(194, 9): binding `ui_context` declared here
-        "assets/fonts/8-bit-pusab.ttf",
+        "assets/fonts/Symtext.ttf",
         LOGICAL_WIDTH as f64,
         LOGICAL_HEIGHT as f64,
     )?;
@@ -329,8 +314,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // --- 3. App Initialization and Run (Unchanged) ---
     let now = Instant::now();
     let mut app: App = App {
-        // <------ type annotation requires that `ui_context` is borrowed for `'static`
-        window: None,
         driver: None,
         manager: ui_manager,
 

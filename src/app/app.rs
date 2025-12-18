@@ -2,18 +2,16 @@ use crate::view::{View, ViewAction};
 use std::collections::HashMap;
 
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
 use winit::event_loop::ActiveEventLoop;
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::WindowId;
 
 use fps_config::Config;
 use fps_ui::{AppDriver, ComponentUpdate, WindowEvent, manager::UIManager};
 
 use crate::{LOGICAL_HEIGHT, LOGICAL_WIDTH, PHYSICAL_HEIGHT, PHYSICAL_WIDTH};
 
-pub struct App<'a> {
-    pub window: Option<Window>,
-    pub driver: Option<AppDriver<'a>>,
+pub struct App {
+    pub driver: Option<AppDriver<'static>>,
     pub manager: UIManager,
 
     pub views: HashMap<String, Box<dyn View>>,
@@ -23,7 +21,7 @@ pub struct App<'a> {
     pub config_path: String,
 }
 
-impl<'a> App<'a> {
+impl App {
     pub fn register_view(&mut self, view: Box<dyn View>) {
         let view_id = view.id().to_string();
 
@@ -44,6 +42,14 @@ impl<'a> App<'a> {
 
         // Show new
         self.manager.set_layer_visibility(view_id, true);
+        
+        // Update view components on activation
+        if let Some(view) = self.views.get_mut(view_id) {
+            let updates = view.on_activate(&self.config);
+            if !updates.is_empty() {
+                self.manager.apply_updates(updates);
+            }
+        }
 
         self.active_view = Some(view_id.to_string());
     }
@@ -64,7 +70,7 @@ impl<'a> App<'a> {
 
             ViewAction::SaveUsername => {
                 // Query the component for the username text
-                let username = self
+                let mut username = self
                     .manager
                     .find_component_by_id_mut("username_input")
                     .map(|c| c.get_text().to_string())
@@ -73,6 +79,10 @@ impl<'a> App<'a> {
                         "ERROR".to_string()
                     });
 
+                if username.is_empty() {
+                    username = "unknown".to_string();
+                }
+                
                 // Update config
                 self.config.username = username.clone();
 
@@ -82,7 +92,6 @@ impl<'a> App<'a> {
                         "username_label".into(),
                         format!("Current user: {}", username),
                     ),
-                    ComponentUpdate::SetText("connect_button".into(), "CONNECTED!".into()),
                     ComponentUpdate::SetText("username_input".into(), String::new()),
                 ]);
 
@@ -95,28 +104,13 @@ impl<'a> App<'a> {
     }
 }
 
-impl<'a> ApplicationHandler for App<'a> {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
-            return;
-        }
-
         println!("--- Initializing Window and UI Renderer ---");
 
-        let attrs = WindowAttributes::default()
-            .with_title("fps_ui Crate Test Window")
-            .with_inner_size(PhysicalSize::new(PHYSICAL_WIDTH, PHYSICAL_HEIGHT))
-            .with_resizable(false);
-
-        let window = event_loop.create_window(attrs).unwrap();
-
-        // SAFETY: Window outlives the event loop
-        let window_ref: &'a Window = unsafe { std::mem::transmute(&window) };
-
-        match AppDriver::new(window_ref, LOGICAL_WIDTH, LOGICAL_HEIGHT) {
+        match AppDriver::new( event_loop, LOGICAL_WIDTH, LOGICAL_HEIGHT, PHYSICAL_WIDTH, PHYSICAL_HEIGHT) {
             Ok(driver) => {
                 self.driver = Some(driver);
-                self.window = Some(window);
             }
             Err(e) => {
                 eprintln!("FATAL: Failed to initialize AppDriver: {}", e);
@@ -168,8 +162,8 @@ impl<'a> ApplicationHandler for App<'a> {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(window) = self.window.as_ref() {
-            window.request_redraw();
+        if let Some(driver) = self.driver.as_ref() {
+            driver.window().request_redraw();
         }
     }
 }
