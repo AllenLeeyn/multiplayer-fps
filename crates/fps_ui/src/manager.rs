@@ -59,7 +59,7 @@ impl UIManager {
             KeyboardInput { .. } => self.handle_keyboard_input(event),
             CursorMoved { .. } => {
                 if let Some((lx, ly)) = logical_cursor {
-                    self.handle_cursor_movement(lx, ly)
+                    self.handle_cursor_movement(lx, ly, event)
                 } else {
                     Vec::new()
                 }
@@ -158,7 +158,7 @@ impl UIManager {
 
         if let Some(focused_id) = &self.focused_component_id.clone() {
             if let Some(comp) = self.find_component_by_id_mut(focused_id) {
-                events.extend(comp.handle_input(event));
+                events.extend(comp.handle_input(event, Some((0.0, 0.0))));
             } else {
                 self.focused_component_id = None;
             }
@@ -167,7 +167,7 @@ impl UIManager {
         events
     }
 
-    fn handle_cursor_movement(&mut self, x: f64, y: f64) -> Vec<UIEvent> {
+    fn handle_cursor_movement(&mut self, x: f64, y: f64, raw_event: &WindowEvent) -> Vec<UIEvent> {
         let new_hover_id = self.hit_test_component(x, y);
         self.last_cursor_position = (x, y);
 
@@ -183,6 +183,12 @@ impl UIManager {
                 if let Some(comp) = self.find_component_by_id_mut(&new_id) {
                     comp.set_hovered(true);
                 }
+            }
+        }
+
+        if let Some(hovered_id) = new_hover_id {
+            if let Some(comp) = self.find_component_by_id_mut(&hovered_id) {
+                return comp.handle_input(raw_event, Some((x, y)));
             }
         }
 
@@ -222,7 +228,7 @@ impl UIManager {
 
             if let Some(hit_id) = hit_id {
                 if let Some(comp) = self.find_component_by_id_mut(&hit_id) {
-                    events.extend(comp.handle_input(raw_event));
+                    events.extend(comp.handle_input(raw_event, Some((x, y))));
                 }
             }
         }

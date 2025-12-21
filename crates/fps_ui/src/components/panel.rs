@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt::{Debug, Formatter, Result};
 
 use super::super::{
@@ -66,7 +67,11 @@ impl Component for Panel {
         LayoutMetrics::default()
     }
 
-    fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
+    fn handle_input(
+        &mut self,
+        _event: &WindowEvent,
+        _cursor_pos: Option<(f64, f64)>,
+    ) -> Vec<UIEvent> {
         Vec::new()
     }
 
@@ -161,5 +166,13 @@ impl Component for Panel {
 
     fn get_text(&self) -> &str {
         &self.id
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

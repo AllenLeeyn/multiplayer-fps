@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt::Debug;
 
 // --- Abstract Types ---
@@ -15,7 +16,8 @@ pub trait Component: Send + Sync + Debug {
     fn layout_metrics(&self) -> LayoutMetrics;
 
     // Logic/Interaction (returns application events)
-    fn handle_input(&mut self, event: &WindowEvent) -> Vec<UIEvent>;
+    fn handle_input(&mut self, event: &WindowEvent, cursor_pos: Option<(f64, f64)>)
+    -> Vec<UIEvent>;
 
     // Data Synchronization (returns true if a visual change requires a redraw)
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool;
@@ -45,4 +47,7 @@ pub trait Component: Send + Sync + Debug {
     fn get_text(&self) -> &str;
 
     fn update(&mut self) {}
+
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

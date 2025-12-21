@@ -2,6 +2,7 @@ use super::super::{
     Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
     calculate_absolute_rect,
 };
+use std::any::Any;
 
 /// Defines the style and content of a text label.
 #[derive(Debug, Clone)]
@@ -49,7 +50,11 @@ impl Component for Label {
         self.metrics
     }
 
-    fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
+    fn handle_input(
+        &mut self,
+        _event: &WindowEvent,
+        _cursor_pos: Option<(f64, f64)>,
+    ) -> Vec<UIEvent> {
         Vec::new()
     }
 
@@ -103,5 +108,13 @@ impl Component for Label {
 
     fn get_text(&self) -> &str {
         &self.text
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

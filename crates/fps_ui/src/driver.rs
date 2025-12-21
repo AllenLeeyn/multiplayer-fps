@@ -24,7 +24,6 @@ impl<'a> AppDriver<'a> {
         physical_width: u32,
         physical_height: u32,
     ) -> Result<Self, Error> {
-        
         let attrs = WindowAttributes::default()
             .with_title("fps_ui Crate Test Window")
             .with_inner_size(PhysicalSize::new(physical_width, physical_height))
@@ -32,8 +31,7 @@ impl<'a> AppDriver<'a> {
 
         let window = event_loop.create_window(attrs).unwrap();
 
-        let window_ref: &'static Window =
-            unsafe { &*(&window as *const Window) };
+        let window_ref: &'static Window = unsafe { &*(&window as *const Window) };
 
         let physical_size = window.inner_size();
         let scale_factor = Self::compute_scale_factor(
@@ -117,7 +115,7 @@ impl<'a> AppDriver<'a> {
     pub fn logical_cursor(&self) -> Option<(f64, f64)> {
         self.logical_cursor
     }
-    
+
     pub fn window(&self) -> &winit::window::Window {
         &self.window
     }

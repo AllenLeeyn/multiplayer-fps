@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::time::{Duration, Instant};
 
 use super::super::{
@@ -72,7 +73,11 @@ impl Component for FpsComponent {
         self.layout_metrics
     }
 
-    fn handle_input(&mut self, _event: &WindowEvent) -> Vec<UIEvent> {
+    fn handle_input(
+        &mut self,
+        _event: &WindowEvent,
+        _cursor_pos: Option<(f64, f64)>,
+    ) -> Vec<UIEvent> {
         Vec::new()
     }
 
@@ -119,11 +124,23 @@ impl Component for FpsComponent {
         let last = self.last_update.unwrap();
         let elapsed = now.duration_since(last);
 
+        if elapsed < Duration::from_secs(1) {
+            return;
+        }
+
         if elapsed >= Duration::from_secs(1) {
             let fps = ((self.frame_count as f32) / elapsed.as_secs_f32()).round() as u32;
             self.frame_count = 0;
             self.last_update = Some(now);
             self.update_fps(fps);
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

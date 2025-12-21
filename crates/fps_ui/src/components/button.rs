@@ -3,6 +3,7 @@ use super::super::{
     UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
 };
 use ab_glyph::{Font, ScaleFont};
+use std::any::Any;
 
 /// A standard interactive button component.
 #[derive(Debug)]
@@ -72,7 +73,11 @@ impl Component for Button {
         self.layout
     }
 
-    fn handle_input(&mut self, event: &WindowEvent) -> Vec<UIEvent> {
+    fn handle_input(
+        &mut self,
+        event: &WindowEvent,
+        _cursor_pos: Option<(f64, f64)>,
+    ) -> Vec<UIEvent> {
         let mut events = Vec::new();
 
         match event {
@@ -186,5 +191,13 @@ impl Component for Button {
 
     fn get_text(&self) -> &str {
         &self.text
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

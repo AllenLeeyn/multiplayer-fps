@@ -1,3 +1,5 @@
+use fps_levels::config::MazeSize;
+use fps_levels::maze::Maze;
 use std::fmt::Debug;
 
 // --- The UI Output Contract (Sent to Application) ---
@@ -20,6 +22,8 @@ pub enum ComponentUpdate {
     Resize { width: f64, height: f64 },
     SetHovered(String, bool),
     SetFocus(String, bool),
+    SetMazeSize(String, MazeSize),
+    SetMaze(String, Maze),
 }
 
 impl ComponentUpdate {
@@ -31,7 +35,9 @@ impl ComponentUpdate {
             | ComponentUpdate::SetValue(id, _)
             | ComponentUpdate::SetPosition(id, _, _)
             | ComponentUpdate::SetFocus(id, _)
-            | ComponentUpdate::SetHovered(id, _) => Some(id),
+            | ComponentUpdate::SetHovered(id, _)
+            | ComponentUpdate::SetMazeSize(id, _)
+            | ComponentUpdate::SetMaze(id, _) => Some(id),
 
             // These variants target layers or are global, and should be handled separately
             ComponentUpdate::SetLayerVisibility(_, _) | ComponentUpdate::Resize { .. } => None,

@@ -1,4 +1,5 @@
 use ab_glyph::{Font, ScaleFont};
+use std::any::Any;
 
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, KeyCode, LayoutMetrics, PhysicalKey,
@@ -96,7 +97,11 @@ impl Component for TextInput {
         needs_redraw
     }
 
-    fn handle_input(&mut self, event: &WindowEvent) -> Vec<UIEvent> {
+    fn handle_input(
+        &mut self,
+        event: &WindowEvent,
+        _cursor_pos: Option<(f64, f64)>,
+    ) -> Vec<UIEvent> {
         let mut events = Vec::new();
 
         if !self.is_focused {
@@ -313,5 +318,13 @@ impl Component for TextInput {
 
     fn get_text(&self) -> &str {
         &self.text
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

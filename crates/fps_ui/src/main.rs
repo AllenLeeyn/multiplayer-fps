@@ -40,7 +40,13 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         println!("--- Initializing Window and UI Renderer ---");
 
-        match AppDriver::new(event_loop, LOGICAL_WIDTH, LOGICAL_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT) {
+        match AppDriver::new(
+            event_loop,
+            LOGICAL_WIDTH,
+            LOGICAL_HEIGHT,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+        ) {
             Ok(driver) => {
                 self.driver = Some(driver);
             }
