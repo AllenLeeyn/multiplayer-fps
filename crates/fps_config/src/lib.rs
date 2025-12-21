@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use fps_levels::maze::Maze;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub username: String,
+    pub maze: Option<Maze>,
 }
 
 impl Config {
@@ -36,6 +39,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             username: "set username here".to_string(),
+            maze: None,
         }
     }
 }

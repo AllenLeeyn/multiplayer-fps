@@ -1,143 +1,229 @@
-use crate::config::{MazeConfig, Difficulty};
-use rand::prelude::*;
-use rand::rng;
+use rand::Rng;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
+use std::error::Error;
 
-/// Each cell in the maze
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A single maze cell.
+/// Wall blocks movement and rays.
+/// Empty is fully walkable.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[repr(u8)]
 pub enum Cell {
-    Empty = 0,
-    Wall = 1,
+    Wall = 0,
+    Empty = 1,
 }
 
-/// Represents a 2D grid-based maze
-#[derive(Debug, Clone)]
+/// A generated maze level.
+///
+/// The maze is a rectangular grid stored in row-major order.
+/// Coordinate system:
+/// - (0, 0) is the top-left corner
+/// - x increases to the right
+/// - y increases downward
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Maze {
-    pub config: MazeConfig,
+    pub name: String,
     pub width: usize,
     pub height: usize,
-    pub grid: Vec<Vec<Cell>>,
-    pub spawn_points: Vec<(usize, usize)>, // (x, y) coordinates
+    pub cells: Vec<Cell>, // row-major: y * width + x
+    pub spawn_points: Vec<(usize, usize)>,
 }
 
 impl Maze {
-    /// Generate a new maze based on config
-    pub fn generate(config: MazeConfig) -> Self {
-        let width = config.grid_size();
-        let height = width; // square maze
+    /// Creates a new maze filled entirely with walls.
+    ///
+    /// Invariant:
+    /// - cells.len() == width * height
+    pub fn new(name: String, width: usize, height: usize) -> Self {
+        let cells = vec![Cell::Wall; width * height];
 
-        // Start with a full wall maze
-        let mut grid = vec![vec![Cell::Wall; width]; height];
-
-        // Generate the maze using recursive backtracking
-        Self::generate_maze(&mut grid, &config);
-
-        // Determine spawn points
-        let spawn_points = Self::generate_spawn_points(&grid, &config);
-
-        Maze {
-            config,
+        Self {
+            name,
             width,
             height,
-            grid,
-            spawn_points,
+            cells,
+            spawn_points: Vec::new(),
         }
     }
 
-    /// Maze generation using recursive backtracking
-    fn generate_maze(grid: &mut Vec<Vec<Cell>>, config: &MazeConfig) {
-        let mut rng = rng();
-        let width = grid.len();
-        let height = grid[0].len();
-
-        let start_x = rng.random_range(0..width/2) * 2;
-        let start_y = rng.random_range(0..height/2) * 2;
-
-        let mut stack = vec![(start_x, start_y)];
-        grid[start_y][start_x] = Cell::Empty;
-
-        let directions = [(0, -2), (0, 2), (-2, 0), (2, 0)];
-
-        while let Some((x, y)) = stack.pop() {
-            let mut neighbors = Vec::new();
-
-            for &(dx, dy) in &directions {
-                let nx = x as isize + dx;
-                let ny = y as isize + dy;
-
-                if nx >= 0 && nx < width as isize && ny >= 0 && ny < height as isize {
-                    if grid[ny as usize][nx as usize] == Cell::Wall {
-                        neighbors.push((nx as usize, ny as usize));
-                    }
-                }
-            }
-
-            if !neighbors.is_empty() {
-                stack.push((x, y));
-
-                let &(nx, ny) = neighbors.choose(&mut rng).unwrap();
-                let wall_x = (x + nx) / 2;
-                let wall_y = (y + ny) / 2;
-                grid[wall_y][wall_x] = Cell::Empty;
-                grid[ny][nx] = Cell::Empty;
-
-                stack.push((nx, ny));
-            }
-        }
-
-        Self::add_dead_ends(grid, config.difficulty);
+    /// Returns true if the given coordinates are inside the maze bounds.
+    #[inline]
+    pub fn in_bounds(&self, x: isize, y: isize) -> bool {
+        x >= 0 && y >= 0 && (x as usize) < self.width && (y as usize) < self.height
     }
 
-    fn add_dead_ends(grid: &mut Vec<Vec<Cell>>, difficulty: Difficulty) {
-        let mut rng = rng();
-        let width = grid.len();
-        let height = grid[0].len();
+    /// Converts (x, y) into a linear index.
+    ///
+    /// # Panics
+    /// Panics if (x, y) is out of bounds.
+    #[inline]
+    pub fn index(&self, x: usize, y: usize) -> usize {
+        debug_assert!(x < self.width && y < self.height);
+        y * self.width + x
+    }
 
-        let dead_end_chance = match difficulty {
-            Difficulty::Easy => 0.05,
-            Difficulty::Normal => 0.15,
-            Difficulty::Hard => 0.3,
+    /// Returns the cell at (x, y).
+    ///
+    /// # Panics
+    /// Panics if (x, y) is out of bounds.
+    #[inline]
+    pub fn get(&self, x: usize, y: usize) -> Cell {
+        let idx = self.index(x, y);
+        self.cells[idx]
+    }
+
+    /// Sets the cell at (x, y).
+    ///
+    /// # Panics
+    /// Panics if (x, y) is out of bounds.
+    #[inline]
+    pub fn set(&mut self, x: usize, y: usize, cell: Cell) {
+        let idx = self.index(x, y);
+        self.cells[idx] = cell;
+    }
+
+    /// Returns true if the cell at (x, y) is empty.
+    #[inline]
+    pub fn is_empty(&self, x: usize, y: usize) -> bool {
+        self.get(x, y) == Cell::Empty
+    }
+
+    /// Returns all in-bounds 4-connected neighbors of (x, y).
+    pub fn neighbors_4(&self, x: usize, y: usize) -> impl Iterator<Item = (usize, usize)> {
+        const DIRS: [(isize, isize); 4] = [
+            (0, -1), // up
+            (0, 1),  // down
+            (-1, 0), // left
+            (1, 0),  // right
+        ];
+
+        DIRS.into_iter().filter_map(move |(dx, dy)| {
+            let nx = x as isize + dx;
+            let ny = y as isize + dy;
+            if self.in_bounds(nx, ny) {
+                Some((nx as usize, ny as usize))
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Counts how many 4-connected neighbors of (x, y) are empty.
+    pub fn empty_neighbor_count(&self, x: usize, y: usize) -> usize {
+        self.neighbors_4(x, y)
+            .filter(|&(nx, ny)| self.is_empty(nx, ny))
+            .count()
+    }
+
+    /// Adds a spawn point.
+    ///
+    /// # Panics
+    /// Panics if the spawn point is out of bounds or not on an empty cell.
+    pub fn add_spawn_point(&mut self, x: usize, y: usize) {
+        debug_assert!(x < self.width && y < self.height);
+        debug_assert!(self.is_empty(x, y));
+
+        self.spawn_points.push((x, y));
+    }
+
+    /// Returns true if all empty cells form a single connected component.
+    ///
+    /// Temporary `u8` clone is used:
+    /// - 0 = Wall
+    /// - 1 = Empty
+    /// - 2 = Visited Empty
+    pub fn is_connected(&self) -> bool {
+        // Clone maze into u8 grid
+        let mut grid: Vec<u8> = self.cells.iter().map(|&c| c as u8).collect();
+
+        // Find the first empty cell to start BFS
+        let start_idx = match grid.iter().position(|&v| v == 1) {
+            Some(idx) => idx,
+            None => return false, // no empty cells → invalid
         };
 
-        for y in 1..height-1 {
-            for x in 1..width-1 {
-                if grid[y][x] == Cell::Empty && rng.random::<f32>() < dead_end_chance {
-                    grid[y][x] = Cell::Wall;
+        let start_x = start_idx % self.width;
+        let start_y = start_idx / self.width;
+
+        let mut queue = VecDeque::new();
+        queue.push_back((start_x, start_y));
+        grid[start_idx] = 2; // mark as visited
+
+        // BFS flood-fill
+        while let Some((x, y)) = queue.pop_front() {
+            for (nx, ny) in self.neighbors_4(x, y) {
+                let idx = self.index(nx, ny);
+                if grid[idx] == 1 {
+                    grid[idx] = 2; // mark visited
+                    queue.push_back((nx, ny));
                 }
             }
         }
+
+        // If any empty cell remains unvisited, the maze is disconnected
+        !grid.iter().any(|&v| v == 1)
     }
 
-    fn generate_spawn_points(grid: &Vec<Vec<Cell>>, config: &MazeConfig) -> Vec<(usize, usize)> {
-        let mut rng = rng();
-        let mut spawns = Vec::new();
-        let rooms = config.room_count();
+    pub fn set_spawn_points(&mut self) -> Result<(), Box<dyn Error>> {
+        let room_size = 3;
+        let rooms_x = self.width / room_size;
+        let rooms_y = self.height / room_size;
 
-        for ry in 0..rooms {
-            for rx in 0..rooms {
-                let room_x = rx * 3;
-                let room_y = ry * 3;
+        let mut rng = rand::rng();
+        self.spawn_points.clear(); // reset existing points
 
+        for ry in 0..rooms_y {
+            for rx in 0..rooms_x {
                 let mut empty_cells = Vec::new();
-                for y in 0..3 {
-                    for x in 0..3 {
-                        let gx = room_x + x;
-                        let gy = room_y + y;
-                        if gx < grid.len() && gy < grid[0].len() && grid[gy][gx] == Cell::Empty {
-                            empty_cells.push((gx, gy));
+
+                // Collect all empty cells in this room
+                for y in (ry * room_size)..((ry + 1) * room_size) {
+                    for x in (rx * room_size)..((rx + 1) * room_size) {
+                        if self.is_empty(x, y) {
+                            empty_cells.push((x, y));
                         }
                     }
                 }
 
-                if let Some(&spawn) = empty_cells.choose(&mut rng) {
-                    spawns.push(spawn);
+                if empty_cells.is_empty() {
+                    return Err(format!(
+                        "Room at ({}, {}) has no empty cells for a spawn point",
+                        rx, ry
+                    )
+                    .into());
                 }
+
+                // Randomly pick one empty cell as spawn
+                let idx = rng.random_range(0..empty_cells.len());
+                let spawn = empty_cells[idx];
+                self.spawn_points.push(spawn);
             }
         }
 
-        spawns
+        Ok(())
     }
+}
 
-    pub fn is_empty(&self, x: usize, y: usize) -> bool {
-        self.grid[y][x] == Cell::Empty
+use std::fmt;
+
+impl fmt::Display for Maze {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let ch = match self.get(x, y) {
+                    Cell::Wall => '#',
+                    Cell::Empty => {
+                        if self.spawn_points.contains(&(x, y)) {
+                            'S'
+                        } else {
+                            '.'
+                        }
+                    }
+                };
+                write!(f, "{ch}")?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }

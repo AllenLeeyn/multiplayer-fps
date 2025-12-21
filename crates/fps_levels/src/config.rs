@@ -1,18 +1,20 @@
 /// Represents the number of rooms per side in the maze.
 #[derive(Debug, Clone, Copy)]
 pub enum MazeSize {
-    Small,  // 4x4 rooms
-    Medium, // 5x5 rooms
-    Big,    // 6x6 rooms
+    XSmall, // 3x3 rooms
+    Small,  // 5x5 rooms
+    Medium, // 7x7 rooms
+    Big,    // 9x9 rooms
 }
 
 impl MazeSize {
     /// Returns the number of rooms per side
     pub fn room_count(&self) -> usize {
         match self {
-            MazeSize::Small => 4,
-            MazeSize::Medium => 5,
-            MazeSize::Big => 6,
+            MazeSize::XSmall => 3,
+            MazeSize::Small => 5,
+            MazeSize::Medium => 7,
+            MazeSize::Big => 9,
         }
     }
 
@@ -27,6 +29,16 @@ pub enum Difficulty {
     Easy,
     Normal,
     Hard,
+}
+
+impl Difficulty {
+    pub fn loop_chance(&self) -> f32 {
+        match self {
+            Difficulty::Easy => 0.25,
+            Difficulty::Normal => 0.15,
+            Difficulty::Hard => 0.01,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -46,6 +58,7 @@ impl MazeConfig {
 
     pub fn max_players(&self) -> usize {
         match self.size {
+            MazeSize::XSmall => 5,
             MazeSize::Small => 10,
             MazeSize::Medium => 20,
             MazeSize::Big => 30,
