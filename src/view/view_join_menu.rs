@@ -1,14 +1,13 @@
 use fps_ui::{
-    ComponentUpdate,
-    Color, UIEvent,
+    Color, ComponentUpdate, UIEvent,
     components::{Button, Label, TextInput},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
 
-use fps_config::Config;
 use super::{View, ViewAction};
+use fps_config::Config;
 
 pub struct ViewJoinMenu;
 
@@ -65,6 +64,7 @@ impl View for ViewJoinMenu {
             Color::WHITE,
             Color::DARK_GRAY,
         );
+
         let connect_button = Button::new(
             "connect_button",
             "CONNECT",
@@ -81,7 +81,7 @@ impl View for ViewJoinMenu {
 
         // Back button (bottom-right)
         let back_button = Button::new(
-            "back_button",
+            "back_join_button",
             "BACK",
             Rect::new(0.86, 0.90, 100.0, 30.0),
             LayoutMetrics {
@@ -111,19 +111,17 @@ impl View for ViewJoinMenu {
 
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
-            UIEvent::ButtonClicked(id) if id == "back_button" => {
+            UIEvent::ButtonClicked(id) if id == "back_join_button" => {
                 vec![ViewAction::SwitchTo("main_menu".to_string())]
             }
             _ => vec![],
         }
     }
-    
+
     fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
-        vec![
-            ComponentUpdate::SetText(
-                "username_label2".into(),
-                format!("as: {}", config.username.clone()),
-            ),
-        ]
+        vec![ComponentUpdate::SetText(
+            "username_label2".into(),
+            format!("as: {}", config.username.clone()),
+        )]
     }
 }

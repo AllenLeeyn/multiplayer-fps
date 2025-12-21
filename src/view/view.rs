@@ -1,5 +1,5 @@
-use fps_ui::{ComponentUpdate, UIEvent, manager::Layer};
 use fps_config::Config;
+use fps_ui::{ComponentUpdate, UIEvent, manager::Layer};
 
 pub enum ViewAction {
     SwitchTo(String), // Request to switch to another view
@@ -7,6 +7,7 @@ pub enum ViewAction {
     Custom(String),   // Custom action with payload
     UpdateComponent(Vec<ComponentUpdate>),
     SaveUsername,
+    SaveMaze(String, String),
 }
 
 pub trait View {
@@ -18,7 +19,7 @@ pub trait View {
 
     /// Handle UI events (from UIManager) and produce high-level actions
     fn handle_ui_events(&mut self, events: &UIEvent) -> Vec<ViewAction>;
-    
+
     /// Called when the view is activated (shown). Can update labels, reset inputs, etc.
     fn on_activate(&mut self, _config: &Config) -> Vec<ComponentUpdate> {
         Vec::new() // default: do nothing

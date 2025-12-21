@@ -19,7 +19,7 @@ use fps_ui::{
 };
 
 use app::App;
-use view::{ViewMainMenu, ViewJoinMenu, ViewHostMenu, ViewLevelMenu};
+use view::{ViewHostMenu, ViewJoinMenu, ViewLevelMenu, ViewMainMenu};
 
 pub const PHYSICAL_WIDTH: u32 = 1600;
 pub const PHYSICAL_HEIGHT: u32 = 900;

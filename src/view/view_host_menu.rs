@@ -1,13 +1,11 @@
 use fps_ui::{
-    ComponentUpdate,
     Color, UIEvent,
-    components::{Button, Label, TextInput},
+    components::{Button, Label},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
 
-use fps_config::Config;
 use super::{View, ViewAction};
 
 pub struct ViewHostMenu;
@@ -38,10 +36,9 @@ impl View for ViewHostMenu {
             },
         );
 
-
         // Back button (bottom-right)
         let back_button = Button::new(
-            "back_button",
+            "back_host_button",
             "BACK",
             Rect::new(0.86, 0.90, 100.0, 30.0),
             LayoutMetrics {
@@ -59,20 +56,16 @@ impl View for ViewHostMenu {
             z_index: 10,
             is_visible: false,
             is_modal: false,
-            components: vec![
-                Box::new(title),
-                Box::new(back_button),
-            ],
+            components: vec![Box::new(title), Box::new(back_button)],
         }
     }
 
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
-            UIEvent::ButtonClicked(id) if id == "back_button" => {
+            UIEvent::ButtonClicked(id) if id == "back_host_button" => {
                 vec![ViewAction::SwitchTo("main_menu".to_string())]
             }
             _ => vec![],
         }
     }
-
 }

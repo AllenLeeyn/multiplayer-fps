@@ -1,14 +1,15 @@
 use fps_ui::{
-    ComponentUpdate,
-    Color, UIEvent,
-    components::{Button, Label, TextInput},
+    Color, ComponentUpdate, UIEvent,
+    components::{Button, Label, MazeEditor, TextInput},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
 
-use fps_config::Config;
 use super::{View, ViewAction};
+use fps_config::Config;
+use fps_levels::config::MazeSize;
+use fps_levels::maze::Maze;
 
 pub struct ViewLevelMenu;
 
@@ -38,10 +39,106 @@ impl View for ViewLevelMenu {
             },
         );
 
+        let maze_name_input = TextInput::new(
+            "maze_name_input".to_string(),
+            Rect::new(0.05, 0.2, 360.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            "Enter maze name....".to_string(),
+            16,
+            24.0,
+            Color::WHITE,
+            Color::DARK_GRAY,
+        );
+
+        let xsmall_button = Button::new(
+            "maze_size_xsmall",
+            "X SMALL",
+            Rect::new(0.05, 0.28, 120.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
+        let small_button = Button::new(
+            "maze_size_small",
+            "SMALL",
+            Rect::new(0.05, 0.35, 120.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
+        let medium_button = Button::new(
+            "maze_size_medium",
+            "MEDIUM",
+            Rect::new(0.05, 0.42, 120.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
+        let big_button = Button::new(
+            "maze_size_big",
+            "BIG",
+            Rect::new(0.05, 0.49, 120.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
+        let maze_editor = MazeEditor::new(
+            "maze_editor",
+            MazeSize::Medium, // default size
+            Rect::new(180.0, 125.0, 330.0, 330.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Px,
+                sizing: LengthMode::Px,
+            },
+            12.0, // pixels per cell
+        );
+
+        let save_button = Button::new(
+            "save_maze_button",
+            "SAVE",
+            Rect::new(0.86, 0.83, 100.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
 
         // Back button (bottom-right)
         let back_button = Button::new(
-            "back_button",
+            "back_level_button",
             "BACK",
             Rect::new(0.86, 0.90, 100.0, 30.0),
             LayoutMetrics {
@@ -61,6 +158,13 @@ impl View for ViewLevelMenu {
             is_modal: false,
             components: vec![
                 Box::new(title),
+                Box::new(maze_name_input),
+                Box::new(xsmall_button),
+                Box::new(small_button),
+                Box::new(medium_button),
+                Box::new(big_button),
+                Box::new(maze_editor),
+                Box::new(save_button),
                 Box::new(back_button),
             ],
         }
@@ -68,11 +172,49 @@ impl View for ViewLevelMenu {
 
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
-            UIEvent::ButtonClicked(id) if id == "back_button" => {
-                vec![ViewAction::SwitchTo("main_menu".to_string())]
-            }
+            UIEvent::ButtonClicked(id) => match id.as_str() {
+                "maze_size_xsmall" => vec![ViewAction::UpdateComponent(vec![
+                    ComponentUpdate::SetMazeSize("maze_editor".to_string(), MazeSize::XSmall),
+                ])],
+
+                "maze_size_small" => vec![ViewAction::UpdateComponent(vec![
+                    ComponentUpdate::SetMazeSize("maze_editor".to_string(), MazeSize::Small),
+                ])],
+
+                "maze_size_medium" => vec![ViewAction::UpdateComponent(vec![
+                    ComponentUpdate::SetMazeSize("maze_editor".to_string(), MazeSize::Medium),
+                ])],
+
+                "maze_size_big" => vec![ViewAction::UpdateComponent(vec![
+                    ComponentUpdate::SetMazeSize("maze_editor".to_string(), MazeSize::Big),
+                ])],
+
+                "save_maze_button" => vec![ViewAction::SaveMaze(
+                    "maze_name_input".to_string(),
+                    "maze_editor".to_string(),
+                )],
+
+                "back_level_button" => vec![ViewAction::SwitchTo("main_menu".to_string())],
+
+                _ => vec![],
+            },
+
             _ => vec![],
         }
     }
 
+    fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
+        let maze = Maze::new("UNKOWN_MAZE".to_string(), 15, 15);
+        vec![
+            ComponentUpdate::SetText("save_maze_button".into(), format!("SAVE")),
+            ComponentUpdate::SetText(
+                "maze_name_input".into(),
+                config.maze.as_ref().unwrap_or(&maze).name.clone(),
+            ),
+            ComponentUpdate::SetMaze(
+                "maze_editor".into(),
+                config.maze.as_ref().unwrap_or(&maze).clone(),
+            ),
+        ]
+    }
 }

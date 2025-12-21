@@ -6,7 +6,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::WindowId;
 
 use fps_config::Config;
-use fps_ui::{AppDriver, ComponentUpdate, WindowEvent, manager::UIManager};
+use fps_ui::{AppDriver, ComponentUpdate, WindowEvent, components::MazeEditor, manager::UIManager};
 
 use crate::{LOGICAL_HEIGHT, LOGICAL_WIDTH, PHYSICAL_HEIGHT, PHYSICAL_WIDTH};
 
@@ -42,7 +42,7 @@ impl App {
 
         // Show new
         self.manager.set_layer_visibility(view_id, true);
-        
+
         // Update view components on activation
         if let Some(view) = self.views.get_mut(view_id) {
             let updates = view.on_activate(&self.config);
@@ -69,38 +69,88 @@ impl App {
             }
 
             ViewAction::SaveUsername => {
-                // Query the component for the username text
-                let mut username = self
-                    .manager
-                    .find_component_by_id_mut("username_input")
-                    .map(|c| c.get_text().to_string())
-                    .unwrap_or_else(|| {
-                        eprintln!("Warning: username_input component not found");
-                        "ERROR".to_string()
-                    });
+                self.save_user();
+            }
 
-                if username.is_empty() {
-                    username = "unknown".to_string();
-                }
-                
-                // Update config
-                self.config.username = username.clone();
-
-                // Update the label
-                self.manager.apply_updates(vec![
-                    ComponentUpdate::SetText(
-                        "username_label".into(),
-                        format!("Current user: {}", username),
-                    ),
-                    ComponentUpdate::SetText("username_input".into(), String::new()),
-                ]);
-
-                // Save to disk
-                self.config.save(&self.config_path);
+            ViewAction::SaveMaze(text_id, maze_id) => {
+                self.save_maze(text_id, maze_id);
             }
 
             _ => {}
         }
+    }
+
+    fn save_user(&mut self) {
+        // Query the component for the username text
+        let mut username = self
+            .manager
+            .find_component_by_id_mut("username_input")
+            .map(|c| c.get_text().to_string())
+            .unwrap_or_else(|| {
+                eprintln!("Warning: username_input component not found");
+                "ERROR".to_string()
+            });
+
+        if username.is_empty() {
+            username = "unknown".to_string();
+        }
+
+        // Update config
+        self.config.username = username.clone();
+
+        // Update the label
+        self.manager.apply_updates(vec![
+            ComponentUpdate::SetText(
+                "username_label".into(),
+                format!("Current user: {}", username),
+            ),
+            ComponentUpdate::SetText("username_input".into(), String::new()),
+        ]);
+
+        // Save to disk
+        self.config.save(&self.config_path);
+    }
+
+    fn save_maze(&mut self, text_id: String, maze_id: String) {
+        // --- Get maze from editor ---
+        let mut maze = match self
+            .manager
+            .find_component_by_id_mut(&maze_id)
+            .and_then(|c| c.as_any().downcast_ref::<MazeEditor>())
+            .map(|e| e.maze().clone())
+        {
+            Some(m) => m,
+            None => {
+                eprintln!("MazeEditor component not found");
+                return;
+            }
+        };
+
+        // --- Get maze name from text input ---
+        let maze_name = self
+            .manager
+            .find_component_by_id_mut(&text_id)
+            .map(|c| c.get_text().to_string())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| {
+                eprintln!("Maze name empty or input not found");
+                "Unnamed Maze".to_string()
+            });
+
+        maze.name = maze_name;
+
+        // --- Overwrite stored maze ---
+        self.config.maze = Some(maze);
+
+        // --- Save config ---
+        self.config.save(&self.config_path);
+
+        // Update the label
+        self.manager.apply_updates(vec![ComponentUpdate::SetText(
+            "save_maze_button".into(),
+            format!("SAVED"),
+        )]);
+        println!("Maze saved successfully");
     }
 }
 
@@ -108,7 +158,13 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         println!("--- Initializing Window and UI Renderer ---");
 
-        match AppDriver::new( event_loop, LOGICAL_WIDTH, LOGICAL_HEIGHT, PHYSICAL_WIDTH, PHYSICAL_HEIGHT) {
+        match AppDriver::new(
+            event_loop,
+            LOGICAL_WIDTH,
+            LOGICAL_HEIGHT,
+            PHYSICAL_WIDTH,
+            PHYSICAL_HEIGHT,
+        ) {
             Ok(driver) => {
                 self.driver = Some(driver);
             }

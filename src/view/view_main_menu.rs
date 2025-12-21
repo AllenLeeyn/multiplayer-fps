@@ -1,7 +1,6 @@
 use fps_config::Config;
 use fps_ui::{
-    Color, UIEvent,
-    ComponentUpdate,
+    Color, ComponentUpdate, UIEvent,
     components::{Button, Label, TextInput},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
@@ -193,7 +192,7 @@ impl View for ViewMainMenu {
             _ => vec![],
         }
     }
-    
+
     fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
         self.username = config.username.clone(); // sync internal state
 
