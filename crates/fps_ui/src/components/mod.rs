@@ -3,6 +3,7 @@ pub mod component;
 pub mod fps_counter;
 pub mod label;
 pub mod maze_editor;
+pub mod maze_viewer;
 pub mod panel;
 pub mod text_input;
 
@@ -11,5 +12,6 @@ pub use component::Component;
 pub use fps_counter::FpsComponent;
 pub use label::Label;
 pub use maze_editor::MazeEditor;
+pub use maze_viewer::MazeView;
 pub use panel::Panel;
 pub use text_input::TextInput;

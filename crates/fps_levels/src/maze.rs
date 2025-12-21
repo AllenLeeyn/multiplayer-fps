@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
 
+use super::config::MazeConfig;
+
 /// A single maze cell.
 /// Wall blocks movement and rays.
 /// Empty is fully walkable.
@@ -27,6 +29,7 @@ pub struct Maze {
     pub height: usize,
     pub cells: Vec<Cell>, // row-major: y * width + x
     pub spawn_points: Vec<(usize, usize)>,
+    pub config: MazeConfig,
 }
 
 impl Maze {
@@ -43,6 +46,7 @@ impl Maze {
             height,
             cells,
             spawn_points: Vec::new(),
+            config: MazeConfig::new(),
         }
     }
 

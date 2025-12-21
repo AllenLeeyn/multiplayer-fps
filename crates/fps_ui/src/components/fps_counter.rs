@@ -124,10 +124,6 @@ impl Component for FpsComponent {
         let last = self.last_update.unwrap();
         let elapsed = now.duration_since(last);
 
-        if elapsed < Duration::from_secs(1) {
-            return;
-        }
-
         if elapsed >= Duration::from_secs(1) {
             let fps = ((self.frame_count as f32) / elapsed.as_secs_f32()).round() as u32;
             self.frame_count = 0;
