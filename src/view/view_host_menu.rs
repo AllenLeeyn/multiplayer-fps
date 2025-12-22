@@ -69,10 +69,23 @@ impl View for ViewHostMenu {
             },
         );
 
+        let username_label3 = Label::new(
+            "username_label3".to_string(),
+            format!("as: unknown"),
+            24.0,
+            Color::WHITE,
+            Rect::new(0.5, 0.13, 400.0, 10.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+        );
+
         // Game name input
         let game_name_input = TextInput::new(
             "game_name_input".to_string(),
-            Rect::new(0.05, 0.20, 360.0, 30.0),
+            Rect::new(0.05, 0.25, 360.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -85,10 +98,25 @@ impl View for ViewHostMenu {
             Color::DARK_GRAY,
         );
 
+        let target_score_input = TextInput::new(
+            "target_score_input".to_string(),
+            Rect::new(0.05, 0.32, 360.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            "Enter target score...".to_string(),
+            16,
+            24.0,
+            Color::WHITE,
+            Color::DARK_GRAY,
+        );
+
         let host_size_xsmall = Button::new(
             "host_size_xsmall",
             "X SMALL",
-            Rect::new(0.05, 0.28, 120.0, 30.0),
+            Rect::new(0.05, 0.4, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -102,7 +130,7 @@ impl View for ViewHostMenu {
         let host_size_small = Button::new(
             "host_size_small",
             "SMALL",
-            Rect::new(0.05, 0.35, 120.0, 30.0),
+            Rect::new(0.05, 0.47, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -116,7 +144,7 @@ impl View for ViewHostMenu {
         let host_size_medium = Button::new(
             "host_size_medium",
             "MEDIUM",
-            Rect::new(0.05, 0.42, 120.0, 30.0),
+            Rect::new(0.05, 0.54, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -130,7 +158,7 @@ impl View for ViewHostMenu {
         let host_size_big = Button::new(
             "host_size_big",
             "BIG",
-            Rect::new(0.05, 0.49, 120.0, 30.0),
+            Rect::new(0.05, 0.61, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -144,7 +172,7 @@ impl View for ViewHostMenu {
         let host_diff_easy = Button::new(
             "host_diff_easy",
             "EASY",
-            Rect::new(0.22, 0.28, 120.0, 30.0),
+            Rect::new(0.22, 0.4, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -158,7 +186,7 @@ impl View for ViewHostMenu {
         let host_diff_normal = Button::new(
             "host_diff_normal",
             "NORMAL",
-            Rect::new(0.22, 0.35, 120.0, 30.0),
+            Rect::new(0.22, 0.47, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -172,7 +200,7 @@ impl View for ViewHostMenu {
         let host_diff_hard = Button::new(
             "host_diff_hard",
             "HARD",
-            Rect::new(0.22, 0.42, 120.0, 30.0),
+            Rect::new(0.22, 0.54, 120.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -192,9 +220,9 @@ impl View for ViewHostMenu {
                 self.maze_config.difficulty,
                 self.maze_config.max_players()
             ),
-            16.0,
+            24.0,
             Color::WHITE,
-            Rect::new(0.05, 0.6, 300.0, 30.0),
+            Rect::new(0.1, 0.2, 300.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -205,7 +233,7 @@ impl View for ViewHostMenu {
         let maze_view = MazeView::new(
             "maze_view",
             self.maze.clone(),
-            Rect::new(0.45, 0.28, 330.0, 330.0),
+            Rect::new(0.51, 0.25, 330.0, 330.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -251,7 +279,9 @@ impl View for ViewHostMenu {
             is_modal: false,
             components: vec![
                 Box::new(title),
+                Box::new(username_label3),
                 Box::new(game_name_input),
+                Box::new(target_score_input),
                 Box::new(host_size_xsmall),
                 Box::new(host_size_small),
                 Box::new(host_size_medium),
@@ -325,6 +355,10 @@ impl View for ViewHostMenu {
         }
 
         vec![
+            ComponentUpdate::SetText(
+                "username_label3".into(),
+                format!("as: {}", config.username.clone()),
+            ),
             ComponentUpdate::SetText("game_name_input".into(), "".to_string()),
             ComponentUpdate::SetText("maze_view".into(), format!("[ Maze: {} ]", self.maze.name)),
             ComponentUpdate::SetText(

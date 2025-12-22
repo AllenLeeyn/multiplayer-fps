@@ -231,6 +231,10 @@
       "Wall",
       "Wall"
     ],
-    "spawn_points": []
+    "spawn_points": [],
+    "config": {
+      "size": "Small",
+      "difficulty": "Easy"
+    }
   }
 }

@@ -12,9 +12,13 @@ pub fn generate_maze(config: &MazeConfig, name: String) -> Maze {
 
     let mut rng = rng();
 
-    // 1. Seed a single starting cell (odd coordinates)
-    let start_x = 0;
-    let start_y = 0;
+    // 1. Seed a single starting cell (even coordinates)
+    let max_x = (size - 1) / 2;
+    let max_y = (size - 1) / 2;
+
+    let start_x = rng.random_range(0..=max_x) * 2;
+    let start_y = rng.random_range(0..=max_y) * 2;
+
     maze.set(start_x, start_y, Cell::Empty);
 
     // 2. DFS corridor carving
