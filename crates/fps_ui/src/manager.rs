@@ -241,4 +241,19 @@ impl UIManager {
             layer.is_visible = visible;
         }
     }
+
+    /// Get a mutable reference to a component of type T by ID
+    pub fn get_component_mut<T: 'static>(&mut self, id: &str) -> Option<&mut T> {
+        self.find_component_by_id_mut(id)
+            .and_then(|boxed| boxed.as_any_mut().downcast_mut::<T>())
+    }
+
+    /// Get an immutable reference to a component of type T by ID
+    pub fn get_component<T: 'static>(&self, id: &str) -> Option<&T> {
+        self.layers
+            .values()
+            .flat_map(|layer| layer.components.iter())
+            .find(|c| c.id() == id)
+            .and_then(|c| c.as_any().downcast_ref::<T>())
+    }
 }

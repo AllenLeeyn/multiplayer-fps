@@ -5,6 +5,7 @@ pub mod label;
 pub mod maze_editor;
 pub mod maze_viewer;
 pub mod panel;
+pub mod text_box;
 pub mod text_input;
 
 pub use button::Button;
@@ -14,4 +15,5 @@ pub use label::Label;
 pub use maze_editor::MazeEditor;
 pub use maze_viewer::MazeView;
 pub use panel::Panel;
+pub use text_box::TextBox;
 pub use text_input::TextInput;

@@ -107,6 +107,7 @@ impl Component for TextInput {
         if !self.is_focused {
             return events;
         }
+        let mut text_changed = false;
 
         self.cursor_visible = true;
 
@@ -132,6 +133,7 @@ impl Component for TextInput {
                                     self.text.insert(self.cursor_index, c);
                                     self.cursor_index += 1;
                                     self.cursor_visible = true;
+                                    text_changed = true;
                                 }
                             }
                         }
@@ -143,11 +145,13 @@ impl Component for TextInput {
                             if self.cursor_index > 0 {
                                 self.text.remove(self.cursor_index - 1);
                                 self.cursor_index -= 1;
+                                text_changed = true;
                             }
                         }
                         PhysicalKey::Code(KeyCode::Delete) => {
                             if self.cursor_index < self.text.len() {
                                 self.text.remove(self.cursor_index);
+                                text_changed = true;
                             }
                         }
                         PhysicalKey::Code(KeyCode::Enter) => {
@@ -169,6 +173,10 @@ impl Component for TextInput {
             }
 
             _ => {} // Ignore other input events
+        }
+
+        if text_changed {
+            events.push(UIEvent::TextChanged(self.id.clone(), self.text.clone()));
         }
 
         events

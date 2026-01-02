@@ -8,6 +8,7 @@ use std::fmt::Debug;
 pub enum UIEvent {
     ButtonClicked(String),
     ButtonToggled(String, bool),
+    TextChanged(String, String),
     TextSubmitted(String, String),
     ValueChanged(String, f32),
     ExitRequested,
@@ -15,7 +16,10 @@ pub enum UIEvent {
 
 #[derive(Debug, Clone)]
 pub enum ComponentUpdate {
-    SetText(String, String),          // (Component ID, New Text)
+    SetText(String, String), // (Component ID, New Text)
+    SetTextVec(String, Vec<String>),
+    AppendText(String, String),
+    AppendTextVec(String, Vec<String>),
     SetValue(String, f32),            // (Component ID, New Value)
     SetLayerVisibility(String, bool), // (Layer ID, Is Visible)
     SetPosition(String, f64, f64),    // (Component ID, New X, New Y)
@@ -32,6 +36,9 @@ impl ComponentUpdate {
         match self {
             // These variants target a specific component ID
             ComponentUpdate::SetText(id, _)
+            | ComponentUpdate::SetTextVec(id, _)
+            | ComponentUpdate::AppendText(id, _)
+            | ComponentUpdate::AppendTextVec(id, _)
             | ComponentUpdate::SetValue(id, _)
             | ComponentUpdate::SetPosition(id, _, _)
             | ComponentUpdate::SetFocus(id, _)
