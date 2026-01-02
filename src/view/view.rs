@@ -1,4 +1,5 @@
 use fps_config::Config;
+use fps_levels::maze::Maze;
 use fps_ui::{ComponentUpdate, UIEvent, manager::Layer};
 
 pub enum ViewAction {
@@ -6,8 +7,16 @@ pub enum ViewAction {
     QuitApp,          // Request to exit the app
     Custom(String),   // Custom action with payload
     UpdateComponent(Vec<ComponentUpdate>),
-    SaveUsername,
+    SaveUsername(String),
     SaveMaze(String, String),
+    HostGame {
+        game_name: String,
+        maze: Maze,
+        target_score: String,
+    },
+    JoinGame(String),
+    LeaveLobby,
+    SendChatMessage(String),
 }
 
 pub trait View {
