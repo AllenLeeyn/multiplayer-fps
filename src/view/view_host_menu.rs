@@ -15,7 +15,11 @@ use fps_ui::{
 
 pub struct ViewHostMenu {
     maze: Maze,
+    custom_maze: Maze,
     maze_config: MazeConfig,
+
+    game_name: String,
+    target_score: String,
 }
 
 impl ViewHostMenu {
@@ -26,12 +30,23 @@ impl ViewHostMenu {
         };
 
         let maze = generate_maze(&maze_config, "HOSTED_MAZE".to_string());
+        let custom_maze = generate_maze(&maze_config, "CUSTOM_MAZE".to_string());
 
-        Self { maze, maze_config }
+        Self {
+            maze,
+            maze_config,
+            custom_maze,
+            game_name: String::new(),
+            target_score: String::new(),
+        }
     }
 
     fn regenerate_maze(&mut self) -> Vec<ViewAction> {
-        self.maze = generate_maze(&self.maze_config, "HOSTED_MAZE".to_string());
+        if self.maze_config.difficulty == Difficulty::Custom {
+            self.maze = self.custom_maze.clone();
+        } else {
+            self.maze = generate_maze(&self.maze_config, "HOSTED_MAZE".to_string());
+        }
 
         vec![ViewAction::UpdateComponent(vec![
             ComponentUpdate::SetText("maze_view".into(), format!("[ Maze: {} ]", self.maze.name)),
@@ -39,9 +54,9 @@ impl ViewHostMenu {
                 "maze_setting_label".into(),
                 format!(
                     "{:?} {:?} Maze. Max Players: {}",
-                    self.maze_config.size,
-                    self.maze_config.difficulty,
-                    self.maze_config.max_players()
+                    self.maze.config.size,
+                    self.maze.config.difficulty,
+                    self.maze.config.max_players()
                 ),
             ),
             ComponentUpdate::SetMaze("maze_view".into(), self.maze.clone()),
@@ -172,7 +187,7 @@ impl View for ViewHostMenu {
         let host_diff_easy = Button::new(
             "host_diff_easy",
             "EASY",
-            Rect::new(0.22, 0.4, 120.0, 30.0),
+            Rect::new(0.22, 0.4, 180.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -186,7 +201,7 @@ impl View for ViewHostMenu {
         let host_diff_normal = Button::new(
             "host_diff_normal",
             "NORMAL",
-            Rect::new(0.22, 0.47, 120.0, 30.0),
+            Rect::new(0.22, 0.47, 180.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -200,7 +215,21 @@ impl View for ViewHostMenu {
         let host_diff_hard = Button::new(
             "host_diff_hard",
             "HARD",
-            Rect::new(0.22, 0.54, 120.0, 30.0),
+            Rect::new(0.22, 0.54, 180.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
+        let host_custom_maze = Button::new(
+            "host_custom_maze",
+            "CUSTOM",
+            Rect::new(0.22, 0.61, 180.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -242,11 +271,24 @@ impl View for ViewHostMenu {
             10.0,
         );
 
+        let error_label = Label::new(
+            "host_error_label".to_string(),
+            "".to_string(), // initially empty
+            16.0,           // font size
+            Color::YELLOW,
+            Rect::new(0.05, 0.83, 400.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+        );
+
         // Host game button
         let host_game_button = Button::new(
             "host_game_button",
             "HOST",
-            Rect::new(0.86, 0.83, 100.0, 30.0),
+            Rect::new(0.88, 0.83, 100.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -261,7 +303,7 @@ impl View for ViewHostMenu {
         let back_button = Button::new(
             "back_host_button",
             "BACK",
-            Rect::new(0.86, 0.90, 100.0, 30.0),
+            Rect::new(0.88, 0.90, 100.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -289,8 +331,10 @@ impl View for ViewHostMenu {
                 Box::new(host_diff_easy),
                 Box::new(host_diff_normal),
                 Box::new(host_diff_hard),
+                Box::new(host_custom_maze),
                 Box::new(maze_view),
                 Box::new(maze_setting_label),
+                Box::new(error_label),
                 Box::new(host_game_button),
                 Box::new(back_button),
             ],
@@ -332,17 +376,39 @@ impl View for ViewHostMenu {
                     self.regenerate_maze()
                 }
 
+                "host_custom_maze" => {
+                    self.maze_config.difficulty = Difficulty::Custom;
+                    self.regenerate_maze()
+                }
+
                 // Host
-                /* "host_game_button" => vec![ViewAction::HostGame {
-                    game_name_input: "game_name_input".to_string(),
-                    maze: self.maze.clone(),
-                }], */
+                "host_game_button" => {
+                    vec![ViewAction::HostGame {
+                        game_name: self.game_name.clone(),
+                        maze: self.maze.clone(),
+                        target_score: self.target_score.clone(),
+                    }]
+                }
+
                 "back_host_button" => {
                     vec![ViewAction::SwitchTo("main_menu".to_string())]
                 }
 
                 _ => vec![],
             },
+
+            UIEvent::TextChanged(id, text) => {
+                match id.as_str() {
+                    "game_name_input" => {
+                        self.game_name = text.clone();
+                    }
+                    "target_score_input" => {
+                        self.target_score = text.clone();
+                    }
+                    _ => {}
+                }
+                vec![]
+            }
 
             _ => vec![],
         }
@@ -351,20 +417,35 @@ impl View for ViewHostMenu {
     fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
         // Use the maze from config if available
         if let Some(maze) = &config.maze {
-            self.maze = maze.clone();
+            self.custom_maze = maze.clone();
         }
+
+        // reste properties
+        self.game_name.clear();
+        self.target_score.clear();
 
         vec![
             ComponentUpdate::SetText(
                 "username_label3".into(),
                 format!("as: {}", config.username.clone()),
             ),
-            ComponentUpdate::SetText("game_name_input".into(), "".to_string()),
-            ComponentUpdate::SetText("maze_view".into(), format!("[ Maze: {} ]", self.maze.name)),
             ComponentUpdate::SetText(
-                "max_players_label".into(),
-                format!("Max Players: {}", self.maze.config.max_players()),
+                "host_custom_maze".into(),
+                format!("{}", self.custom_maze.name),
             ),
+            ComponentUpdate::SetText("game_name_input".into(), "".to_string()),
+            ComponentUpdate::SetText("target_score_input".into(), "".to_string()),
+            ComponentUpdate::SetText(
+                "maze_setting_label".into(),
+                format!(
+                    "{:?} {:?} Maze. Max Players: {}",
+                    self.maze_config.size,
+                    self.maze_config.difficulty,
+                    self.maze_config.max_players()
+                ),
+            ),
+            ComponentUpdate::SetText("maze_view".into(), format!("[ Maze: {} ]", self.maze.name)),
+            ComponentUpdate::SetText("host_error_label".into(), String::new()),
         ]
     }
 }
