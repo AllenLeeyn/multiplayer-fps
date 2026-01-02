@@ -30,14 +30,20 @@ impl ServerSocket {
         })
     }
 
+    fn mark_client_alive(&mut self, addr: SocketAddr) {
+        self.clients
+            .entry(addr)
+            .or_insert(ClientInfo {
+                last_seen: now_ms(),
+            })
+            .last_seen = now_ms();
+    }
+
     /// Receive a message from any client
     pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>, Box<dyn Error>> {
         match self.socket.recv() {
             Ok((msg, addr)) => {
-                let entry = self.clients.entry(addr).or_insert(ClientInfo {
-                    last_seen: now_ms(),
-                });
-                entry.last_seen = now_ms();
+                self.mark_client_alive(addr);
                 Ok(Some((msg, addr)))
             }
             Err(e) => Err(e),
@@ -88,14 +94,16 @@ impl ServerSocket {
 
     /// Handle a pong from a client and reset the timeout for that client
     pub fn handle_pong(&mut self, addr: SocketAddr, seq: u32) -> Option<Duration> {
+        self.mark_client_alive(addr);
         self.ping_manager.handle_pong(seq, addr)
     }
 
     pub fn handle_ping(
-        &self,
+        &mut self,
         addr: SocketAddr,
         seq: u32,
     ) -> Result<(SocketAddr, Message), Box<dyn Error>> {
+        self.mark_client_alive(addr);
         let pong_msg = Message::new_pong(seq);
         Ok((addr, pong_msg))
     }
@@ -128,6 +136,16 @@ impl ServerSocket {
 
     pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>> {
         self.socket.local_addr()
+    }
+
+    /// Get local socket address
+    pub fn local_ip(&self) -> Result<String, Box<dyn Error>> {
+        self.socket.local_ip()
+    }
+
+    pub fn public_addr(&self) -> Result<String, Box<dyn Error>> {
+        let port = self.socket.local_addr()?.port();
+        Ok(format!("{}:{}", self.local_ip()?, port))
     }
 }
 

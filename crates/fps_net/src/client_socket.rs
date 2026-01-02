@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use super::{Message, NetSocket, PingManager};
 
+#[derive(Debug)]
 /// ClientSocket represents a client connection to a server.
 pub struct ClientSocket {
     socket: NetSocket,

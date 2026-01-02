@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
+#[derive(Debug)]
 /// Represents a ping currently in-flight, tied to a specific client address
 struct PingEntry {
     timestamp: Instant,
     addr: SocketAddr,
 }
 
+#[derive(Debug)]
 /// Manages ping/pong messages for multiple clients
 pub struct PingManager {
     next_sequence: u32,                     // Sequence for pings

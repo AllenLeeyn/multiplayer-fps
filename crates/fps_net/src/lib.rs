@@ -12,4 +12,4 @@ pub use net_socket::NetSocket;
 pub use ping::PingManager;
 pub use protocol::{MessageHeader, MessageType};
 pub use server_socket::ServerSocket;
-pub use util::now_ms;
+pub use util::{ignore_would_block, now_ms};

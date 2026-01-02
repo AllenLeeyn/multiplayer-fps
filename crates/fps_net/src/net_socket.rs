@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::Message;
 
+#[derive(Debug)]
 struct ReliableEntry {
     msg: Message,
     addr: SocketAddr,
@@ -12,6 +13,7 @@ struct ReliableEntry {
     attempts: u32,
 }
 
+#[derive(Debug)]
 // handle reliable
 pub struct NetSocket {
     socket: UdpSocket,
@@ -19,6 +21,8 @@ pub struct NetSocket {
     recv_buffer: Vec<u8>,
     pub timeout: Duration,
     reliable_queue: HashMap<u32, ReliableEntry>,
+    pub local_ip: String,
+    pub public_ip: String,
 }
 
 impl NetSocket {
@@ -27,13 +31,32 @@ impl NetSocket {
         let socket = UdpSocket::bind(addr)?;
         socket.set_nonblocking(true)?;
 
+        let local_ip = Self::detect_local_ip().unwrap_or_else(|| "127.0.0.1".to_string());
+        let public_ip = Self::detect_public_ip().unwrap_or_else(|| "127.0.0.1".to_string());
+
         Ok(Self {
             socket,
             sequence: 0,
             recv_buffer: vec![0u8; 65536], // max UDP size
             timeout,
             reliable_queue: HashMap::new(),
+            local_ip,
+            public_ip,
         })
+    }
+
+    /// Detect a LAN/public IP that other machines can connect to
+    fn detect_local_ip() -> Option<String> {
+        // Use UDP trick to get the interface IP without sending data
+        let temp_socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+        temp_socket.connect("8.8.8.8:80").ok()?; // Any external address works
+        Some(temp_socket.local_addr().ok()?.ip().to_string())
+    }
+
+    fn detect_public_ip() -> Option<String> {
+        let response = reqwest::blocking::get("https://api.ipify.org").ok()?;
+        let ip = response.text().ok()?;
+        Some(ip.trim().to_string())
     }
 
     /// Receive a message from the socket
@@ -119,6 +142,11 @@ impl NetSocket {
     /// Get local socket address
     pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>> {
         Ok(self.socket.local_addr()?)
+    }
+
+    /// Get local socket address
+    pub fn local_ip(&self) -> Result<String, Box<dyn Error>> {
+        Ok(self.local_ip.clone())
     }
 }
 

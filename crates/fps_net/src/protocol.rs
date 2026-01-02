@@ -13,6 +13,12 @@ pub enum MessageType {
     Reliable = 6,
     Unreliable = 7,
     Acknowledgement = 8,
+
+    JoinGame = 9,
+    GameInfo = 10,
+    ChatMessage = 11,
+
+    ClientList = 12,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 use super::{MessageHeader, MessageType, now_ms};
+use fps_levels::maze::Maze;
 
 /// Function that serializes any payload of type T into Vec<u8>
 pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -11,11 +12,34 @@ pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Erro
         .map_err(|e| format!("Failed to encode payload: {}", e).into())
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JoinGamePayload {
+    pub username: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameInfoPayload {
+    pub game_name: String,
+    pub maze: Maze,
+    pub target_score: String,
+}
+
 /// Generic network message
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
     pub header: MessageHeader,
     pub payload: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessagePayload {
+    pub username: String,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ClientListPayload {
+    pub clients: Vec<String>,
 }
 
 impl Message {
@@ -117,6 +141,38 @@ impl Message {
         Self::new(MessageType::Acknowledgement, sequence, Some(payload))
     }
 
+    pub fn new_join_game(sequence: u32, payload: &JoinGamePayload) -> Self {
+        let payload = encode_payload(payload).expect("Encoding JoinGame payload should never fail");
+
+        Self::new(MessageType::JoinGame, sequence, Some(payload))
+    }
+
+    pub fn new_game_info(sequence: u32, payload: &GameInfoPayload) -> Self {
+        let payload = encode_payload(payload).expect("Encoding GameInfo payload should never fail");
+
+        Self::new(MessageType::GameInfo, sequence, Some(payload))
+    }
+
+    pub fn new_chat_message(sequence: u32, payload: &ChatMessagePayload) -> Self {
+        let payload_bytes =
+            super::encode_payload(payload).expect("Failed to encode ChatMessage payload");
+        Self::new(
+            super::MessageType::ChatMessage,
+            sequence,
+            Some(payload_bytes),
+        )
+    }
+
+    pub fn new_client_list(sequence: u32, payload: &ClientListPayload) -> Self {
+        let payload_bytes =
+            super::encode_payload(payload).expect("Failed to encode ClientList payload");
+        Self::new(
+            super::MessageType::ClientList,
+            sequence,
+            Some(payload_bytes),
+        )
+    }
+
     // --------------------------------------------------
     // Helper methods to check message type
     // --------------------------------------------------
@@ -155,6 +211,57 @@ impl Message {
 
     pub fn is_disconnect_notice(&self) -> bool {
         self.header.msg_type == MessageType::DisconnectNotice
+    }
+
+    pub fn is_join_game(&self) -> bool {
+        self.header.msg_type == MessageType::JoinGame
+    }
+
+    pub fn is_game_info(&self) -> bool {
+        self.header.msg_type == MessageType::GameInfo
+    }
+
+    pub fn is_chat_message(&self) -> bool {
+        self.header.msg_type == MessageType::ChatMessage
+    }
+
+    pub fn is_client_list(&self) -> bool {
+        self.header.msg_type == MessageType::ClientList
+    }
+
+    pub fn decode_connect_deny(&self) -> Result<String, Box<dyn std::error::Error>> {
+        if !self.is_connect_deny() {
+            return Err("Message is not ConnectDeny".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_join_game(&self) -> Result<JoinGamePayload, Box<dyn std::error::Error>> {
+        if !self.is_join_game() {
+            return Err("Message is not JoinGame".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_game_info(&self) -> Result<GameInfoPayload, Box<dyn std::error::Error>> {
+        if !self.is_game_info() {
+            return Err("Message is not GameInfo".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_chat_message(&self) -> Result<ChatMessagePayload, Box<dyn std::error::Error>> {
+        if !self.is_chat_message() {
+            return Err("Message is not ChatMessage".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_client_list(&self) -> Result<ClientListPayload, Box<dyn std::error::Error>> {
+        if !self.is_client_list() {
+            return Err("Message is not ClientList".into());
+        }
+        self.decode_payload()
     }
 }
 
