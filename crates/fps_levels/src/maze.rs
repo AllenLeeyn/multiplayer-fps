@@ -22,7 +22,7 @@ pub enum Cell {
 /// - (0, 0) is the top-left corner
 /// - x increases to the right
 /// - y increases downward
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Maze {
     pub name: String,
     pub width: usize,
@@ -203,6 +203,19 @@ impl Maze {
                 self.spawn_points.push(spawn);
             }
         }
+
+        Ok(())
+    }
+
+    pub fn validate(&mut self) -> Result<(), String> {
+        // 1. Check connectivity
+        if !self.is_connected() {
+            return Err("Maze is not fully connected".to_string());
+        }
+
+        // 2. Try to set spawn points
+        self.set_spawn_points()
+            .map_err(|e| format!("Failed to set spawn points: {}", e))?;
 
         Ok(())
     }

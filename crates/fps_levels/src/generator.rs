@@ -9,6 +9,7 @@ use crate::maze::{Cell, Maze};
 pub fn generate_maze(config: &MazeConfig, name: String) -> Maze {
     let size = config.grid_size();
     let mut maze = Maze::new(name, size, size);
+    maze.config = *config;
 
     let mut rng = rng();
 

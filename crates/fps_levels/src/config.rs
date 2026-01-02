@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Represents the number of rooms per side in the maze.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum MazeSize {
     XSmall, // 3x3 rooms
-    Small,  // 5x5 rooms
+    #[default]
+    Small, // 5x5 rooms
     Medium, // 7x7 rooms
     Big,    // 9x9 rooms
 }
@@ -26,11 +27,13 @@ impl MazeSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Difficulty {
     Easy,
+    #[default]
     Normal,
     Hard,
+    Custom,
 }
 
 impl Difficulty {
@@ -39,11 +42,12 @@ impl Difficulty {
             Difficulty::Easy => 0.25,
             Difficulty::Normal => 0.15,
             Difficulty::Hard => 0.01,
+            Difficulty::Custom => 0.1,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct MazeConfig {
     pub size: MazeSize,
     pub difficulty: Difficulty,
@@ -53,7 +57,7 @@ impl MazeConfig {
     pub fn new() -> Self {
         Self {
             size: MazeSize::Small,
-            difficulty: Difficulty::Easy,
+            difficulty: Difficulty::Custom,
         }
     }
     pub fn room_count(&self) -> usize {
