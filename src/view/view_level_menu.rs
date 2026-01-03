@@ -11,11 +11,15 @@ use fps_config::Config;
 use fps_levels::config::MazeSize;
 use fps_levels::maze::Maze;
 
-pub struct ViewLevelMenu;
+pub struct ViewLevelMenu {
+    maze_name: String,
+}
 
 impl ViewLevelMenu {
     pub fn new() -> Self {
-        Self
+        Self {
+            maze_name: String::new(),
+        }
     }
 }
 
@@ -125,7 +129,7 @@ impl View for ViewLevelMenu {
         let save_button = Button::new(
             "save_maze_button",
             "SAVE",
-            Rect::new(0.86, 0.83, 100.0, 30.0),
+            Rect::new(0.88, 0.83, 100.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -140,7 +144,7 @@ impl View for ViewLevelMenu {
         let back_button = Button::new(
             "back_level_button",
             "BACK",
-            Rect::new(0.86, 0.90, 100.0, 30.0),
+            Rect::new(0.88, 0.90, 100.0, 30.0),
             LayoutMetrics {
                 anchor: AnchorPoint::TopLeft,
                 positioning: LengthMode::Percent,
@@ -190,7 +194,7 @@ impl View for ViewLevelMenu {
                 ])],
 
                 "save_maze_button" => vec![ViewAction::SaveMaze(
-                    "maze_name_input".to_string(),
+                    self.maze_name.clone(),
                     "maze_editor".to_string(),
                 )],
 
@@ -199,12 +203,19 @@ impl View for ViewLevelMenu {
                 _ => vec![],
             },
 
+            UIEvent::TextChanged(id, value) if id == "maze_name_input" => {
+                self.maze_name = value.clone();
+                vec![]
+            }
+
             _ => vec![],
         }
     }
 
     fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
         let maze = Maze::new("UNKOWN_MAZE".to_string(), 15, 15);
+        self.maze_name = maze.name.clone();
+
         vec![
             ComponentUpdate::SetText("save_maze_button".into(), format!("SAVE")),
             ComponentUpdate::SetText(
