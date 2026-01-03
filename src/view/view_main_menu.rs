@@ -78,19 +78,6 @@ impl View for ViewMainMenu {
             Color::DARK_GRAY,
         );
 
-        let save_username = Button::new(
-            "save_username_button",
-            "SAVE",
-            Rect::new(0.49, 0.6, 160.0, 30.0),
-            LayoutMetrics {
-                anchor: AnchorPoint::TopLeft,
-                positioning: LengthMode::Percent,
-                sizing: LengthMode::Px,
-            },
-            Color::WHITE,
-            Color::BLACK,
-            Color::DARK_GRAY,
-        );
         let join = Button::new(
             "join_button",
             "JOIN GAME",
@@ -154,7 +141,6 @@ impl View for ViewMainMenu {
                 Box::new(title),
                 Box::new(username_label),
                 Box::new(input),
-                Box::new(save_username),
                 Box::new(join),
                 Box::new(host),
                 Box::new(level),
@@ -165,28 +151,21 @@ impl View for ViewMainMenu {
 
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
-            UIEvent::ButtonClicked(id) if id == "save_username_button" => {
-                vec![ViewAction::SaveUsername]
-            }
-
-            UIEvent::ButtonClicked(id) if id == "join_button" => {
-                vec![ViewAction::SwitchTo("join_menu".to_string())]
-            }
-
-            UIEvent::ButtonClicked(id) if id == "host_button" => {
-                vec![ViewAction::SwitchTo("host_menu".to_string())]
-            }
-
-            UIEvent::ButtonClicked(id) if id == "level_button" => {
-                vec![ViewAction::SwitchTo("level_menu".to_string())]
-            }
-
-            UIEvent::ButtonClicked(id) if id == "quit_button" => {
-                vec![ViewAction::QuitApp]
-            }
+            UIEvent::ButtonClicked(id) => match id.as_str() {
+                "join_button" => vec![ViewAction::SwitchTo("join_menu".to_string())],
+                "host_button" => vec![ViewAction::SwitchTo("host_menu".to_string())],
+                "level_button" => vec![ViewAction::SwitchTo("level_menu".to_string())],
+                "quit_button" => vec![ViewAction::QuitApp],
+                _ => vec![],
+            },
 
             UIEvent::TextSubmitted(id, _value) if id == "username_input" => {
-                vec![ViewAction::SaveUsername]
+                vec![ViewAction::SaveUsername(self.username.clone())]
+            }
+
+            UIEvent::TextChanged(id, text) if id == "username_input" => {
+                self.username = text.clone();
+                vec![ViewAction::SaveUsername(self.username.clone())]
             }
 
             _ => vec![],
