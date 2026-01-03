@@ -19,7 +19,7 @@ use fps_ui::{
 };
 
 use app::App;
-use view::{ViewHostMenu, ViewJoinMenu, ViewLevelMenu, ViewMainMenu};
+use view::{ViewHostMenu, ViewJoinMenu, ViewLevelMenu, ViewMainMenu, ViewLobby};
 
 pub const PHYSICAL_WIDTH: u32 = 1600;
 pub const PHYSICAL_HEIGHT: u32 = 900;
@@ -80,6 +80,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let join_game_view = ViewJoinMenu::new();
     let host_game_view = ViewHostMenu::new();
     let host_level_view = ViewLevelMenu::new();
+    let lobby_view = ViewLobby::new();
 
     let mut app = App {
         driver: None,
@@ -88,12 +89,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         active_view: None,
         config,
         config_path,
+        server: None,
+        game: None,
     };
 
     app.register_view(Box::new(main_menu_view));
     app.register_view(Box::new(join_game_view));
     app.register_view(Box::new(host_game_view));
     app.register_view(Box::new(host_level_view));
+    app.register_view(Box::new(lobby_view));
     app.activate_view("main_menu");
 
     event_loop.run_app(&mut app)?;
