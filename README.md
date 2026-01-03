@@ -390,3 +390,24 @@ multiplayer_fps/
 ├── .gitignore
 └── README.md
 ```
+
+### To-do List
+- setup simple chat. limit to a certain length. 
+    - client to send messages
+    - server validate and broadcast to all clients
+    - client to display messages. no history. chat clean on leaving lobby?
+
+- setup game states
+- setup game start
+- display world on client side
+    - raycasting engine. no verticality?
+    - render maze walls
+- setup basic movement and shooting
+- setup hit detection and scoring
+- setup grace period after being hit
+- setup winning condition and game end
+- setup leaderboard display
+
+#### maybe
+- save and list previously connected servers
+

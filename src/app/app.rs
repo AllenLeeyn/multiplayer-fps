@@ -1,11 +1,16 @@
 use crate::view::{View, ViewAction};
-use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::mpsc;
+use std::thread;
+use std::{collections::HashMap, time::Duration};
 
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::WindowId;
 
+use super::{GameServer, ServerHandle, game::Game};
 use fps_config::Config;
+use fps_levels::maze::Maze;
 use fps_ui::{AppDriver, ComponentUpdate, WindowEvent, components::MazeEditor, manager::UIManager};
 
 use crate::{LOGICAL_HEIGHT, LOGICAL_WIDTH, PHYSICAL_HEIGHT, PHYSICAL_WIDTH};
@@ -19,6 +24,9 @@ pub struct App {
 
     pub config: Config,
     pub config_path: String,
+
+    pub server: Option<ServerHandle>,
+    pub game: Option<Game>,
 }
 
 impl App {
@@ -65,92 +73,246 @@ impl App {
             }
 
             ViewAction::QuitApp => {
+                self.kill_game();
                 event_loop.exit();
             }
 
-            ViewAction::SaveUsername => {
-                self.save_user();
+            ViewAction::SaveUsername(username) => {
+                self.save_user(&username);
             }
 
-            ViewAction::SaveMaze(text_id, maze_id) => {
-                self.save_maze(text_id, maze_id);
+            ViewAction::SaveMaze(maze_name, maze_id) => {
+                self.save_maze(maze_name, maze_id);
+            }
+
+            ViewAction::HostGame {
+                game_name,
+                maze,
+                target_score,
+            } => {
+                self.host_game(game_name, maze, target_score);
+            }
+
+            ViewAction::JoinGame(server_addr) => {
+                self.join_game(server_addr);
+            }
+
+            ViewAction::LeaveLobby => {
+                self.kill_game();
+                self.activate_view("main_menu");
+            }
+
+            ViewAction::SendChatMessage(chat_msg) => {
+                if let Some(game) = &mut self.game {
+                    let _ = game.send_chat_msg(&chat_msg, &self.config.username);
+                    self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                        "lobby_chat_input".into(),
+                        String::new(),
+                    )]);
+                }
             }
 
             _ => {}
         }
     }
 
-    fn save_user(&mut self) {
-        // Query the component for the username text
-        let mut username = self
-            .manager
-            .find_component_by_id_mut("username_input")
-            .map(|c| c.get_text().to_string())
-            .unwrap_or_else(|| {
-                eprintln!("Warning: username_input component not found");
-                "ERROR".to_string()
-            });
+    fn kill_game(&mut self) {
+        if let Some(game) = self.game.take() {
+            println!("Disconnected from game '{}'", game.game_name);
+            game.kill();
+        }
 
+        if let Some(server) = self.server.take() {
+            server.shutdown();
+        }
+    }
+
+    fn save_user(&mut self, mut username: &str) {
         if username.is_empty() {
-            username = "unknown".to_string();
+            username = "unknown";
         }
 
         // Update config
-        self.config.username = username.clone();
+        self.config.username = username.to_string();
 
         // Update the label
-        self.manager.apply_updates(vec![
-            ComponentUpdate::SetText(
-                "username_label".into(),
-                format!("Current user: {}", username),
-            ),
-            ComponentUpdate::SetText("username_input".into(), String::new()),
-        ]);
+        self.manager.apply_updates(vec![ComponentUpdate::SetText(
+            "username_label".into(),
+            format!("Current user: {}", username),
+        )]);
 
         // Save to disk
         self.config.save(&self.config_path);
     }
 
-    fn save_maze(&mut self, text_id: String, maze_id: String) {
-        // --- Get maze from editor ---
-        let mut maze = match self
-            .manager
-            .find_component_by_id_mut(&maze_id)
-            .and_then(|c| c.as_any().downcast_ref::<MazeEditor>())
-            .map(|e| e.maze().clone())
-        {
-            Some(m) => m,
-            None => {
-                eprintln!("MazeEditor component not found");
+    fn save_maze(&mut self, maze_name: String, maze_id: String) {
+        if let Some(editor) = self.manager.get_component_mut::<MazeEditor>(&maze_id) {
+            let mut maze = editor.maze().clone(); // clone current maze
+            maze.name = maze_name.clone(); // set new name
+
+            // --- Overwrite stored maze ---
+            self.config.maze = Some(maze.clone());
+
+            // --- Save config ---
+            self.config.save(&self.config_path);
+
+            // Update the label
+            self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                "save_maze_button".into(),
+                "SAVED".into(),
+            )]);
+
+            println!("Maze '{}' saved successfully", maze_name);
+        } else {
+            eprintln!("MazeEditor component not found");
+        }
+    }
+
+    pub fn validate_game_settings(
+        &self,
+        game_name: &str,
+        maze: &Maze,
+        target_score: &str,
+    ) -> Result<(), String> {
+        // Validate game name
+        if game_name.trim().is_empty() {
+            return Err("Game name cannot be empty".to_string());
+        }
+
+        // Validate target score
+        let score = target_score
+            .parse::<u32>()
+            .map_err(|_| "Target score must be a number".to_string())?;
+        if !(30..=9999).contains(&score) {
+            return Err("Target score must be between 30 and 9999".to_string());
+        }
+
+        // Validate maze connectivity
+        if !maze.is_connected() {
+            return Err("Maze is not fully connected".to_string());
+        }
+
+        // Validate spawn points
+        let mut maze_clone = maze.clone();
+        maze_clone
+            .set_spawn_points()
+            .map_err(|e| format!("Failed to set spawn points: {}", e))?;
+
+        Ok(())
+    }
+
+    pub fn connect_server(&mut self, server_addr: SocketAddr) -> Result<(), String> {
+        if self.game.is_some() {
+            return Err("Already connected to a game".into());
+        }
+
+        let username = self.config.username.clone();
+
+        let game = Game::connect(
+            server_addr,
+            "0.0.0.0:0", // ephemeral client port
+            Duration::from_secs(5),
+            username,
+        )
+        .map_err(|e| format!("Failed to connect to server: {}", e))?;
+
+        println!(
+            "Connected to game '{:?}' at {}",
+            game.game_name, server_addr
+        );
+
+        self.game = Some(game);
+        Ok(())
+    }
+
+    fn host_game(&mut self, game_name: String, maze: Maze, target_score: String) {
+        if let Err(msg) = self.validate_game_settings(&game_name, &maze, &target_score) {
+            self.set_host_error(msg);
+            return;
+        }
+
+        println!(
+            "Hosting game '{}' with target score {} and maze '{}'",
+            game_name, target_score, maze.name
+        );
+
+        // Start server
+        let mut server_addr = String::new();
+        if self.server.is_none() {
+            match start_server("0.0.0.0:9000", game_name, maze, target_score) {
+                Ok((handle, public_addr)) => {
+                    println!("Server started successfully {:?}", public_addr);
+                    self.server = Some(handle);
+                    server_addr = public_addr.clone();
+                    self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                        "lobby_addr_label".into(),
+                        public_addr.into(),
+                    )]);
+                }
+                Err(e) => {
+                    self.set_host_error(format!("Failed to start server: {}", e));
+                    return;
+                }
+            }
+        }
+
+        self.set_host_error("");
+        self.join_game(server_addr.to_string());
+    }
+
+    fn set_host_error(&mut self, msg: impl Into<String>) {
+        self.manager.apply_updates(vec![ComponentUpdate::SetText(
+            "host_error_label".into(),
+            msg.into(),
+        )]);
+    }
+
+    fn join_game(&mut self, server_addr: String) {
+        self.set_host_error("Connecting... Please wait");
+        self.set_join_error("Connecting... Please wait");
+
+        let server_addr: SocketAddr = match server_addr.parse() {
+            Ok(addr) => addr,
+            Err(_) => {
+                self.set_join_error("Invalid server address");
                 return;
             }
         };
 
-        // --- Get maze name from text input ---
-        let maze_name = self
-            .manager
-            .find_component_by_id_mut(&text_id)
-            .map(|c| c.get_text().to_string())
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| {
-                eprintln!("Maze name empty or input not found");
-                "Unnamed Maze".to_string()
-            });
+        println!("Joining game at {}", server_addr);
 
-        maze.name = maze_name;
+        if let Err(err) = self.connect_server(server_addr) {
+            self.set_host_error(err.clone());
+            self.set_join_error(err);
+            return;
+        }
 
-        // --- Overwrite stored maze ---
-        self.config.maze = Some(maze);
+        self.set_host_error("");
+        self.set_join_error("");
+        self.activate_view("lobby");
 
-        // --- Save config ---
-        self.config.save(&self.config_path);
+        if let Some(game) = self.game.as_ref() {
+            self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                "lobby_maze_settings".into(),
+                format!(
+                    "{:?} {:?} Maze | Max Players: {} | Win Socre: {}",
+                    game.maze.config.size,
+                    game.maze.config.difficulty,
+                    game.maze.config.max_players(),
+                    game.target_score,
+                ),
+            )]);
+        } else {
+            self.set_host_error(format!("Game not found"));
+            self.set_join_error(format!("Game not found"));
+        }
+    }
 
-        // Update the label
+    fn set_join_error(&mut self, msg: impl Into<String>) {
         self.manager.apply_updates(vec![ComponentUpdate::SetText(
-            "save_maze_button".into(),
-            format!("SAVED"),
+            "join_error_label".into(),
+            msg.into(),
         )]);
-        println!("Maze saved successfully");
     }
 }
 
@@ -185,6 +347,14 @@ impl ApplicationHandler for App {
             self.manager.process_input(&event, driver.logical_cursor())
         };
 
+        if let Some(game) = &mut self.game {
+            let (updates, actions) = game.poll();
+            self.manager.apply_updates(updates);
+            for action in actions {
+                self.handle_view_action(action, event_loop);
+            }
+        }
+
         for ui_event in ui_events {
             let actions = match self.active_view.as_deref() {
                 Some(id) => self
@@ -205,7 +375,10 @@ impl ApplicationHandler for App {
         }
 
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => {
+                self.kill_game();
+                event_loop.exit();
+            }
 
             WindowEvent::RedrawRequested => {
                 self.manager.update_components();
@@ -222,4 +395,26 @@ impl ApplicationHandler for App {
             driver.window().request_redraw();
         }
     }
+}
+
+fn start_server(
+    bind_addr: &str,
+    game_name: String,
+    maze: Maze,
+    target_score: String,
+) -> Result<(ServerHandle, String), Box<dyn std::error::Error>> {
+    let mut maze = maze.clone();
+    maze.set_spawn_points()?;
+    let server = GameServer::new(bind_addr, game_name, maze, target_score)?;
+
+    let public_addr = server.public_addr()?;
+
+    println!("{:?}", public_addr);
+    let (cmd_tx, cmd_rx) = mpsc::channel();
+
+    let join = thread::spawn(move || {
+        server.run(cmd_rx);
+    });
+
+    Ok((ServerHandle { cmd_tx, join }, public_addr))
 }

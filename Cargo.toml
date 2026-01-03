@@ -8,6 +8,7 @@ winit = "0.30.12"
 fps_ui = { path = "crates/fps_ui" }
 fps_config = { path = "crates/fps_config" }
 fps_levels = { path = "crates/fps_levels" }
+fps_net = { path = "crates/fps_net" }
 
 [workspace]
 members = [
