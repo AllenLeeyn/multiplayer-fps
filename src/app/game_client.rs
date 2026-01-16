@@ -21,7 +21,7 @@ use fps_levels::maze::Maze;
 use fps_net::message::GameInputPayload;
 use fps_net::{
     ClientSocket, Message, MessageType, ignore_would_block,
-    message::{ChatMessagePayload, GameInfoPayload, JoinGamePayload, GameSnapShotPayload},
+    message::{ChatMessagePayload, GameInfoPayload, JoinGamePayload, GameSnapShotPayload, PlayerSnapshot},
 };
 use fps_ui::ComponentUpdate;
 
@@ -36,6 +36,7 @@ use super::{Client, GameState, Pos};
 pub struct Game {
     pub _server_addr: SocketAddr,
     pub player_name: String,
+    pub last_seq: u32,
 
     // --- game settings from server ---
     pub game_name: String,
@@ -48,6 +49,16 @@ pub struct Game {
 
     // --- networking ---
     pub net_handle: GameNetHandle,
+    
+    // --- interpolation state ---
+    /// Previous snapshot state for interpolation (positions before current)
+    prev_snapshot: Option<GameSnapShotPayload>,
+    /// Current snapshot state (latest received)
+    current_snapshot: Option<GameSnapShotPayload>,
+    /// Interpolation progress (0.0 = prev, 1.0 = current)
+    interpolation_alpha: f32,
+    /// Time when current snapshot was received
+    snapshot_time: Instant,
 }
 
 impl Game {
@@ -139,6 +150,7 @@ impl Game {
             _server_addr: server_addr,
             player_name: username,
             game_name: game_info.game_name,
+            last_seq: 0,
             maze: game_info.maze,
             target_score: game_info.target_score,
             players: HashMap::new(),
@@ -146,6 +158,10 @@ impl Game {
             state,
             is_host: cur_username == game_info.host_username,
             net_handle,
+            prev_snapshot: None,
+            current_snapshot: None,
+            interpolation_alpha: 1.0,
+            snapshot_time: Instant::now(),
         })
     }
 
@@ -240,11 +256,20 @@ impl Game {
 
                 (GameState::InGame, GameNetEvent::Snapshot(msg)) => {
                     self.state = GameState::InGame;
-                    if let Ok(payload) = msg.decode_game_snapshot() {
-                        self.apply_snapshot(payload);
-                        ui_updates.extend(self.update_leaderboard());
-                        ui_updates.extend(self.update_mini_map());
-                        ui_updates.extend(self.update_game_render());
+                    // Handle sequence wrapping: if difference is less than half of u32::MAX,
+                    // treat it as a newer packet (handles wrap-around correctly)
+                    let seq_diff = msg.header.sequence.wrapping_sub(self.last_seq);
+                    if seq_diff > 0 && seq_diff < 0x8000_0000 {
+                        self.last_seq = msg.header.sequence;
+                        if let Ok(payload) = msg.decode_game_snapshot() {
+                            // Move current to previous, new snapshot becomes current
+                            if let Some(current) = self.current_snapshot.take() {
+                                self.prev_snapshot = Some(current);
+                            }
+                            self.current_snapshot = Some(payload);
+                            self.snapshot_time = Instant::now();
+                            self.interpolation_alpha = 0.0; // Start interpolation from beginning
+                        }
                     }
                 }
 
@@ -263,6 +288,14 @@ impl Game {
             }
         }
 
+        // Update interpolation and apply interpolated state
+        if self.state == GameState::InGame {
+            self.update_interpolation();
+            ui_updates.extend(self.update_leaderboard());
+            ui_updates.extend(self.update_mini_map());
+            ui_updates.extend(self.update_game_render());
+        }
+        
         (ui_updates, view_actions)
     }
 
@@ -412,6 +445,72 @@ impl Game {
         }
 
         updates
+    }
+
+    /// Updates interpolation and applies interpolated snapshot
+    fn update_interpolation(&mut self) {
+        // If we have both previous and current snapshots, interpolate
+        if let (Some(prev), Some(current)) = (&self.prev_snapshot, &self.current_snapshot) {
+            // Advance interpolation (1 frame = 1.0, so increment by 1.0 each frame)
+            // At 30Hz server rate, we want to interpolate over 1 client frame
+            // Assuming client runs at 60Hz, that's 2 frames, so increment by 0.5 per frame
+            // For simplicity, we'll interpolate over 1 frame (increment by 1.0)
+            self.interpolation_alpha = (self.interpolation_alpha + 1.0).min(1.0);
+            
+            // Create interpolated snapshot
+            let interpolated = self.interpolate_snapshots(prev, current, self.interpolation_alpha);
+            self.apply_snapshot(interpolated);
+        } else if let Some(current) = &self.current_snapshot {
+            // Only current snapshot available, apply directly
+            self.apply_snapshot(current.clone());
+        }
+    }
+    
+    /// Interpolates between two snapshots
+    fn interpolate_snapshots(
+        &self,
+        prev: &GameSnapShotPayload,
+        current: &GameSnapShotPayload,
+        alpha: f32,
+    ) -> GameSnapShotPayload {
+        let mut interpolated_players = HashMap::new();
+        
+        // Interpolate player positions
+        for (id, current_snap) in &current.players {
+            if let Some(prev_snap) = prev.players.get(id) {
+                // Interpolate position
+                let x = prev_snap.pos.0 + (current_snap.pos.0 - prev_snap.pos.0) * alpha;
+                let y = prev_snap.pos.1 + (current_snap.pos.1 - prev_snap.pos.1) * alpha;
+                
+                // Interpolate angle (handle wrapping)
+                let mut angle = prev_snap.pos.2;
+                let angle_diff = current_snap.pos.2 - prev_snap.pos.2;
+                // Normalize angle difference to [-PI, PI] range
+                let angle_diff = if angle_diff > std::f32::consts::PI {
+                    angle_diff - 2.0 * std::f32::consts::PI
+                } else if angle_diff < -std::f32::consts::PI {
+                    angle_diff + 2.0 * std::f32::consts::PI
+                } else {
+                    angle_diff
+                };
+                angle += angle_diff * alpha;
+                
+                interpolated_players.insert(id.clone(), PlayerSnapshot {
+                    pos: (x, y, angle),
+                    score: current_snap.score, // Don't interpolate score
+                    is_invincible: current_snap.is_invincible, // Use current state
+                });
+            } else {
+                // New player, use current snapshot
+                interpolated_players.insert(id.clone(), current_snap.clone());
+            }
+        }
+        
+        // For bullets, use current snapshot (they move too fast to interpolate meaningfully)
+        GameSnapShotPayload {
+            players: interpolated_players,
+            bullets: current.bullets.clone(),
+        }
     }
 
     pub fn kill(self) {

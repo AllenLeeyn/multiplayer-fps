@@ -81,8 +81,8 @@ pub mod server {
     /// Default bind address for the game server.
     pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:9000";
     
-    /// Server tick duration in milliseconds (~60 FPS).
-    pub const TICK_DURATION_MS: u64 = 16;
+    /// Server tick duration in milliseconds (~30 FPS).
+    pub const TICK_DURATION_MS: u64 = 33;
     
     /// Server tick duration as a `Duration` type.
     pub const TICK_DURATION: Duration = Duration::from_millis(TICK_DURATION_MS);

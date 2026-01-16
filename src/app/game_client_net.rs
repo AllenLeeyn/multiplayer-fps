@@ -199,6 +199,9 @@ impl GameNet {
                 self.last_ping = Instant::now();
             }
 
+            // Resend reliable packets
+            self.socket.resend_pending();
+            
             std::thread::sleep(Duration::from_millis(client::NET_THREAD_SLEEP_MS));
         }
     }
