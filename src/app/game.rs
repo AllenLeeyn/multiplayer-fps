@@ -70,8 +70,9 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
 
     client.pos.rotate(input.mouse_dx * dt);
 
+    let spd_modifier = if client.is_invincible() { 1.5 } else { 1.0 };
     let base_speed = player_speed(input.is_running);
-    let move_step = base_speed * dt;
+    let move_step = base_speed * dt * spd_modifier;
 
     let (orig_x, orig_y, _) = client.pos.to_tuple();
 

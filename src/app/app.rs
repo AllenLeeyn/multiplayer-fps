@@ -140,6 +140,7 @@ impl App {
             }
 
             ViewAction::GameEnd(winner) => {
+                self.game_input.clear();
                 self.activate_view("lobby");
                 self.manager.apply_updates(vec![ComponentUpdate::AppendTextVec(
                     "lobby_chat_log".into(),
@@ -438,8 +439,6 @@ impl ApplicationHandler for App {
             
             if game.state == GameState::InGame {
                 self.game_input.handle_game_input(&event);
-                let payload = self.game_input.snapshot();
-                let _ = game.send_game_input(payload);
             }
 
             for action in actions {
@@ -473,6 +472,11 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
+                if let Some(game) = self.game.as_mut() && game.state == GameState::InGame {
+                    let payload = self.game_input.snapshot(); // This clears the dx
+                    let _ = game.send_game_input(payload);
+                }
+
                 self.manager.update_components();
                 if let Some(driver) = self.driver.as_mut() {
                     driver.render(&mut self.manager).unwrap();

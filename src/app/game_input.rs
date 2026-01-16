@@ -17,6 +17,10 @@ pub struct GameInputState {
 }
 
 impl GameInputState {
+    pub fn clear(&mut self) {
+        self.actions.clear();
+    }
+    
     pub fn handle_game_input(
         &mut self,
         event: &WindowEvent,

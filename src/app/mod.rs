@@ -18,7 +18,7 @@ pub use pos::Pos;
 pub const BOX_SIZE: f32 = 100.0;
 pub const PLAYER_SIZE: f32 = 50.0;
 pub const PLAYER_WALK_SPD: f32 = 250.0;
-pub const PLAYER_RUN_SPD: f32 = 450.0;
+pub const PLAYER_RUN_SPD: f32 = 350.0;
 pub const PLAYER_SIDESTEP_FACTOR: f32 = 0.8;
 pub const PLAYER_BACKSTEP_FACTOR: f32 = 0.7;
 pub const BULLET_SIZE: f32 = 5.0;

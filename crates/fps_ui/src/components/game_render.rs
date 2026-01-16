@@ -151,11 +151,14 @@ impl GameRender {
         for player in sorted_players {
             if player.is_invincible {
                 // Use system time or a frame counter to toggle visibility
-                let time_ms = SystemTime::now()
+                /* let time_ms = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap().as_millis();
                 
-                if (time_ms / 100) % 2 == 0 { continue; } 
+                if (time_ms / 100) % 2 == 0 { continue; }  */
+
+                // just hide the player
+                continue;
             }
 
             let dx = player.pos.0 - px;
