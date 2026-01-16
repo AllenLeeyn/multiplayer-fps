@@ -1,6 +1,7 @@
 use bincode::config::standard;
 use bincode::serde::{decode_from_slice, encode_to_vec};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 
 use super::{MessageHeader, MessageType, now_ms};
@@ -21,7 +22,9 @@ pub struct JoinGamePayload {
 pub struct GameInfoPayload {
     pub game_name: String,
     pub maze: Maze,
-    pub target_score: String,
+    pub target_score: u32,
+    pub host_username: String,
+    pub state: String,
 }
 
 /// Generic network message
@@ -40,6 +43,37 @@ pub struct ChatMessagePayload {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientListPayload {
     pub clients: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PlayerSnapshot {
+    pub pos: (f32, f32, f32), // x, y, angle
+    pub score: u32,
+    pub is_invincible: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BulletSnapshot {
+    pub pos: (f32, f32, f32), // x, y, angle (angle helps with drawing tracers)
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameSnapShotPayload {
+    pub players: HashMap<String, PlayerSnapshot>, // (id, info)
+    pub bullets: Vec<BulletSnapshot>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameInputPayload {
+    pub actions: HashSet<u8>,
+    pub is_running: bool,
+    pub mouse_dx: f32,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GameEndPayload {
+    pub winner: String,
 }
 
 impl Message {
@@ -173,6 +207,36 @@ impl Message {
         )
     }
 
+    pub fn new_game_start(sequence: u32) -> Self {
+        Self::new(MessageType::StartGame, sequence, None)
+    }
+
+    pub fn new_game_snapshot(sequence: u32,  payload: &GameSnapShotPayload) -> Self {
+        let payload_bytes =
+            super::encode_payload(payload).expect("Failed to encode GameSnapshot payload");
+        Self::new(
+            super::MessageType::GameSnapShot,
+            sequence,
+            Some(payload_bytes),
+        )
+    }
+
+    pub fn new_game_input(sequence: u32,  payload: &GameInputPayload) -> Self {
+        let payload_bytes =
+            super::encode_payload(payload).expect("Failed to encode GameInput payload");
+        Self::new(
+            super::MessageType::GameInput,
+            sequence,
+            Some(payload_bytes),
+        )
+    }
+    
+    pub fn new_game_end(sequence: u32, winner: &str) -> Self {
+        let payload = encode_to_vec(&winner, standard())
+            .expect("Encoding game_end payload should never fail");
+        Self::new(MessageType::GameEnd, sequence, Some(payload))
+    }
+
     // --------------------------------------------------
     // Helper methods to check message type
     // --------------------------------------------------
@@ -229,6 +293,22 @@ impl Message {
         self.header.msg_type == MessageType::ClientList
     }
 
+    pub fn is_game_start(&self) -> bool {
+        self.header.msg_type == MessageType::StartGame
+    }
+
+    pub fn is_game_snapshot(&self) -> bool {
+        self.header.msg_type == MessageType::GameSnapShot
+    }
+
+    pub fn is_game_input(&self) -> bool {
+        self.header.msg_type == MessageType::GameInput
+    }
+
+    pub fn is_game_end(&self) -> bool {
+        self.header.msg_type == MessageType::GameEnd
+    }
+
     pub fn decode_connect_deny(&self) -> Result<String, Box<dyn std::error::Error>> {
         if !self.is_connect_deny() {
             return Err("Message is not ConnectDeny".into());
@@ -260,6 +340,27 @@ impl Message {
     pub fn decode_client_list(&self) -> Result<ClientListPayload, Box<dyn std::error::Error>> {
         if !self.is_client_list() {
             return Err("Message is not ClientList".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_game_snapshot(&self) -> Result<GameSnapShotPayload, Box<dyn std::error::Error>> {
+        if !self.is_game_snapshot() {
+            return Err("Message is not GameSnapShot".into());
+        }
+        self.decode_payload()
+    }
+    
+    pub fn decode_game_input(&self) -> Result<GameInputPayload, Box<dyn std::error::Error>> {
+        if !self.is_game_input() {
+            return Err("Message is not GameInput".into());
+        }
+        self.decode_payload()
+    }
+
+    pub fn decode_game_end(&self) -> Result<GameEndPayload, Box<dyn std::error::Error>> {
+        if !self.is_game_end() {
+            return Err("Message is not GameEnd".into());
         }
         self.decode_payload()
     }

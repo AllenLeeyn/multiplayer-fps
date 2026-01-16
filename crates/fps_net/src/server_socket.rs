@@ -84,6 +84,19 @@ impl ServerSocket {
         Ok(failed)
     }
 
+    /// Broadcast a message to all connected clients
+    pub fn broadcast_relibale(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>> {
+        let addrs: Vec<_> = self.clients.keys().copied().collect();
+        let mut failed = Vec::new();
+        for addr in addrs {
+            if let Err(e) = self.send_reliable(addr, msg) {
+                eprintln!("Failed to send to {}: {}", addr, e);
+                failed.push(addr);
+            }
+        }
+        Ok(failed)
+    }
+
     /// Send a ping to a specific client and return the sequence number
     pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32, Box<dyn Error>> {
         let seq = self.ping_manager.create_ping(addr);

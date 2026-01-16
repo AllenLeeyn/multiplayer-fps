@@ -9,3 +9,4 @@ glam = "0.30.9"
 pixels = "0.15.0"
 winit = "0.30.12"
 fps_levels = { path = "../fps_levels" }
+image = "0.25.9"

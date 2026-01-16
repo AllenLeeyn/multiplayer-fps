@@ -1,4 +1,4 @@
-use super::Color;
+use super::{Color, draw_point};
 use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont, point};
 use std::collections::HashMap;
 use std::fs::File;
@@ -110,8 +110,8 @@ impl FontManager {
             // Copy the cached pixels directly onto the frame buffer
             for y in 0..cached_glyph.height {
                 for x in 0..cached_glyph.width {
-                    let abs_x = glyph_x + x;
-                    let abs_y = glyph_y + y - size_pixels as u32;
+                    let abs_x = glyph_x + x as u32;
+                    let abs_y = glyph_y + y as u32 - size_pixels as u32;
 
                     if abs_x >= logical_width || abs_y >= logical_height {
                         continue;
@@ -172,6 +172,7 @@ pub fn rasterize_glyph_data(
     color: Color,
 ) -> CachedGlyph {
     const BPP: usize = 4;
+    let mut color = color.clone();
 
     let scaled_font = font_arc.as_scaled(scale);
     let glyph = glyph_id.with_scale_and_position(scale, point(0.0, scaled_font.ascent()));
@@ -198,24 +199,14 @@ pub fn rasterize_glyph_data(
     let buffer_width = (px_bounds.max.x - px_bounds.min.x).ceil() as u32;
     let buffer_height = (px_bounds.max.y - px_bounds.min.y).ceil() as u32;
 
-    let total_size = (buffer_width * buffer_height * BPP as u32) as usize;
+    let total_size = (buffer_width * buffer_height) as usize * BPP;
     let mut pixels: Vec<u8> = vec![0; total_size];
 
     // RASTERIZATION (Anti-Aliased)
     outlined_glyph.draw(|rel_x, rel_y, alpha| {
-        // 1. Calculate buffer coordinates using the fractional offset
-        let x = rel_x as usize;
-        let y = rel_y as usize;
-
-        let offset = (y * buffer_width as usize + x) * BPP;
-
-        if offset + 3 < pixels.len() {
-            // Set the color and the calculated alpha (A-A)
-            pixels[offset] = color.r;
-            pixels[offset + 1] = color.g;
-            pixels[offset + 2] = color.b;
-            pixels[offset + 3] = (alpha * 255.0) as u8; // Use scaled alpha
-        }
+        color.set_alpha_f32(alpha);
+        // Use draw_point
+        draw_point(&mut pixels, buffer_width, buffer_height, rel_x, rel_y, color);
     });
 
     // Return the struct

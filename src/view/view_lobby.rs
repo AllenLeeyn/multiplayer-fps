@@ -4,7 +4,7 @@ use fps_levels::maze::Maze;
 
 use fps_ui::{
     Color, ComponentUpdate, UIEvent,
-    components::{Button, Label, TextBox, TextInput},
+    components::{Button, Label, MazeView, TextBox, TextInput},
     geometry::Rect,
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
@@ -156,6 +156,32 @@ impl View for ViewLobby {
             Color::DARK_GRAY,
         );
 
+        let lobby_maze_view = MazeView::new(
+            "lobby_maze_view",
+            self.maze.clone(),
+            Rect::new(0.8, 0.05, 110.0, 110.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            3.0,
+        );
+
+        let start_game_button = Button::new(
+            "start_game_button",
+            "START",
+            Rect::new(0.9, 0.83, 80.0, 30.0),
+            LayoutMetrics {
+                anchor: AnchorPoint::TopLeft,
+                positioning: LengthMode::Percent,
+                sizing: LengthMode::Px,
+            },
+            Color::WHITE,
+            Color::BLACK,
+            Color::DARK_GRAY,
+        );
+
         let leave_button = Button::new(
             "lobby_leave_button",
             "QUIT",
@@ -183,7 +209,9 @@ impl View for ViewLobby {
                 Box::new(user_list),
                 Box::new(chat_log),
                 Box::new(chat_input),
+                Box::new(lobby_maze_view),
                 Box::new(send_button),
+                Box::new(start_game_button),
                 Box::new(leave_button),
             ],
         }
@@ -197,6 +225,10 @@ impl View for ViewLobby {
             }
 
             UIEvent::TextSubmitted(id, _text) if id == "lobby_chat_input" => self.try_send_chat(),
+
+            UIEvent::ButtonClicked(id) if id == "start_game_button" => {
+                vec![ViewAction::SendStartGame]
+            }
 
             UIEvent::ButtonClicked(id) if id == "lobby_send_button" => self.try_send_chat(),
 
@@ -228,7 +260,6 @@ impl View for ViewLobby {
                     self.target_score,
                 ),
             ),
-            ComponentUpdate::SetText("lobby_user_list".into(), "".into()),
             ComponentUpdate::SetText("lobby_chat_log".into(), "".into()),
             ComponentUpdate::SetText("lobby_chat_input".into(), "".into()),
         ]

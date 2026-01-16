@@ -2,7 +2,7 @@ use std::any::Any;
 
 use super::super::{
     Color, Component, ComponentUpdate, IntRect, LayoutMetrics, Rect, UIEvent, UIMainContext,
-    WindowEvent, calculate_absolute_rect,
+    WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 
 #[derive(Debug)]
@@ -26,6 +26,8 @@ pub struct TextBox {
     font_size: f32,
     text_color: Color,
     background_color: Color,
+
+    is_visible: bool,
 }
 
 impl TextBox {
@@ -49,6 +51,7 @@ impl TextBox {
             font_size,
             text_color,
             background_color,
+            is_visible: true,
         }
     }
 
@@ -127,6 +130,11 @@ impl Component for TextBox {
                 return false;
             }
 
+            ComponentUpdate::SetVisibility(_, visibility) => {
+                self.is_visible = *visibility;
+                return true;
+            }
+
             _ => return false,
         }
 
@@ -140,26 +148,22 @@ impl Component for TextBox {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        const BPP: usize = 4;
-
         let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
         let abs_rect: IntRect = bounds_f64.to_int_rect();
 
         let (logical_width, logical_height) = context.layout.size_as_u32();
-        let draw_width = logical_width as usize;
 
         // --- Background ---
-        for y in abs_rect.y..(abs_rect.y + abs_rect.h as i32) {
-            for x in abs_rect.x..(abs_rect.x + abs_rect.w as i32) {
-                if x >= 0 && y >= 0 && x < logical_width as i32 && y < logical_height as i32 {
-                    let o = (y as usize * draw_width + x as usize) * BPP;
-                    frame[o] = self.background_color.r;
-                    frame[o + 1] = self.background_color.g;
-                    frame[o + 2] = self.background_color.b;
-                    frame[o + 3] = 255;
-                }
-            }
-        }
+        draw_filled_box(
+            frame,
+            logical_width,
+            logical_height,
+            abs_rect.x as u32,
+            abs_rect.y as u32,
+            abs_rect.w as u32,
+            abs_rect.h as u32,
+            self.background_color,
+        );
 
         // --- Clamp scroll ---
         let max_scroll = self.max_scroll(bounds_f64.h as f32);

@@ -6,7 +6,7 @@ use std::any::Any;
 
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, LayoutMetrics, MouseButton, Rect,
-    UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
+    UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_bordered_box
 };
 
 #[derive(Debug)]
@@ -182,21 +182,19 @@ impl Component for MazeEditor {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        const BYTES_PER_PIXEL: usize = 4;
-
         let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
         let abs_rect: IntRect = bounds_f64.to_int_rect();
-        let start_x = abs_rect.x as isize;
-        let start_y = abs_rect.y as isize;
+        let start_x = abs_rect.x as u32;
+        let start_y = abs_rect.y as u32;
 
-        let cell_px = self.cell_px.round() as isize;
+        let cell_px = self.cell_px.round() as u32;
 
-        let (draw_width, draw_height) = context.layout.size_as_usize();
+        let (draw_width, draw_height) = context.layout.size_as_u32();
 
         let grid_color = Color::BLACK;
 
-        for my in 0..self.maze.height as isize {
-            for mx in 0..self.maze.width as isize {
+        for my in 0..self.maze.height as u32 {
+            for mx in 0..self.maze.width as u32 {
                 let fill_color = match self.maze.get(mx as usize, my as usize) {
                     Cell::Wall => Color::DARK_GRAY,
                     Cell::Empty => Color::LIME,
@@ -205,34 +203,17 @@ impl Component for MazeEditor {
                 let px0 = start_x + mx * cell_px;
                 let py0 = start_y + my * cell_px;
 
-                for py in 0..cell_px {
-                    let y = py0 + py;
-                    if y < 0 || y >= draw_height as isize {
-                        continue;
-                    }
-
-                    for px in 0..cell_px {
-                        let x = px0 + px;
-                        if x < 0 || x >= draw_width as isize {
-                            continue;
-                        }
-
-                        let color = if px == cell_px - 1 || py == cell_px - 1 {
-                            grid_color
-                        } else {
-                            fill_color
-                        };
-
-                        let offset = (y as usize * draw_width + x as usize) * BYTES_PER_PIXEL;
-
-                        if offset + 3 < frame.len() {
-                            frame[offset] = color.r;
-                            frame[offset + 1] = color.g;
-                            frame[offset + 2] = color.b;
-                            frame[offset + 3] = color.a;
-                        }
-                    }
-                }
+                draw_filled_bordered_box(
+                    frame,
+                    draw_width,
+                    draw_height,
+                    px0,
+                    py0,
+                    cell_px,
+                    cell_px,
+                    fill_color,
+                    grid_color,
+                );
             }
         }
     }

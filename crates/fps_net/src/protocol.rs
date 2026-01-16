@@ -19,6 +19,11 @@ pub enum MessageType {
     ChatMessage = 11,
 
     ClientList = 12,
+    StartGame = 13,
+
+    GameSnapShot = 14,
+    GameInput = 15,
+    GameEnd = 16
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]

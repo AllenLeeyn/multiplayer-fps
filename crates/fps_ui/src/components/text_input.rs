@@ -3,7 +3,7 @@ use std::any::Any;
 
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, KeyCode, LayoutMetrics, PhysicalKey,
-    Rect, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
+    Rect, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 
 /// A standard single-line text input field component.
@@ -114,7 +114,6 @@ impl Component for TextInput {
         match event {
             WindowEvent::KeyboardInput {
                 event, // The winit::event::KeyEvent struct
-                is_synthetic: _,
                 ..
             } => {
                 // We typically only want to process input/control on the 'Pressed' state
@@ -210,12 +209,9 @@ impl Component for TextInput {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        const BPP: usize = 4;
-
         // Use the geometry module to get the final screen bounds
         let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
         let (logical_width, logical_height) = context.layout.size_as_u32();
-        let draw_width = logical_width as usize;
 
         // Pixel-snap the bounds for drawing
         let abs_rect: IntRect = bounds_f64.to_int_rect();
@@ -239,18 +235,16 @@ impl Component for TextInput {
         };
 
         // 2. Draw Background
-        for y in abs_rect.y..(abs_rect.y + abs_rect.h as i32) {
-            for x in abs_rect.x..(abs_rect.x + abs_rect.w as i32) {
-                if x >= 0 && x < logical_width as i32 && y >= 0 && y < logical_height as i32 {
-                    let offset = (y as usize * draw_width + x as usize) * BPP;
-
-                    frame[offset] = bg_color.r;
-                    frame[offset + 1] = bg_color.g;
-                    frame[offset + 2] = bg_color.b;
-                    frame[offset + 3] = 255;
-                }
-            }
-        }
+        draw_filled_box(
+            frame,
+            logical_width,
+            logical_height,
+            abs_rect.x as u32,
+            abs_rect.y as u32,
+            abs_rect.w,
+            abs_rect.h,
+            bg_color,
+        );
 
         // 3. Draw Text
         let padding_x = 5.0; // Left padding
@@ -292,35 +286,27 @@ impl Component for TextInput {
                 .measure_text_width(text_before_cursor, self.font_size);
 
             // Cursor position
-            let cursor_x = (text_start_x + advance_x) as i32;
+            let cursor_x = (text_start_x + advance_x) as u32;
             let cursor_w = 2; // Cursor width in pixels
 
-            let cursor_h = (line_height * 0.8) as i32; // 80% of line height
+            let cursor_h = (line_height * 0.8) as u32; // 80% of line height
 
-            let cursor_y_center = abs_rect.y + abs_rect.h as i32 / 2;
+            let cursor_y_center = abs_rect.y as u32 + abs_rect.h / 2;
             let cursor_y = cursor_y_center - cursor_h / 2;
 
             let cursor_color = Color::WHITE;
 
             // Simplified Cursor Drawing
-            for y in cursor_y..(cursor_y + cursor_h) {
-                for x in cursor_x..(cursor_x + cursor_w) {
-                    // Check bounds against the component's visible area
-                    if x >= abs_rect.x
-                        && x < (abs_rect.x + abs_rect.w as i32)
-                        && y >= abs_rect.y
-                        && y < (abs_rect.y + abs_rect.h as i32)
-                    {
-                        let offset = (y as usize * draw_width + x as usize) * BPP;
-
-                        // Draw opaque white cursor
-                        frame[offset] = cursor_color.r;
-                        frame[offset + 1] = cursor_color.g;
-                        frame[offset + 2] = cursor_color.b;
-                        frame[offset + 3] = 255;
-                    }
-                }
-            }
+            draw_filled_box(
+                frame,
+                logical_width,
+                logical_height,
+                cursor_x,
+                cursor_y,
+                cursor_w,
+                cursor_h,
+                cursor_color,
+            );
         }
     }
 

@@ -392,21 +392,39 @@ multiplayer_fps/
 ```
 
 ### To-do List
-- setup simple chat. limit to a certain length. 
-    - client to send messages
-    - server validate and broadcast to all clients
-    - client to display messages. no history. chat clean on leaving lobby?
+- [O]create game view
+- [O]setup input capture for movement
+- client game input
+    - [O]movement input (WASD and Shift)
+    - [O]mouse input for Direction
+    - [O]mouse input for shoot
+    - [O]ESC to exit
 
-- setup game states
-- setup game start
-- display world on client side
-    - raycasting engine. no verticality?
-    - render maze walls
-- setup basic movement and shooting
-- setup hit detection and scoring
-- setup grace period after being hit
-- setup winning condition and game end
-- setup leaderboard display
+- setup server side game logic
+    - [O]setup size of world and players
+    - [O]setup positioning and direction
+    - [O]setup player action
+    - setup bullet struct
+    - setup player status
+    - setup shooting and hit detection
+    - setup scoring and grace period
+    - setup winning condition
+    - [O]setup player exit and disconnect
+    
+- [O]send snapshot
+- [O]read snapshot
+- [O]send client input to server
+- [O]process client input to update game state
+
+- [O]setup game view
+- [O]setup client side drawing
+- [O]display world on client side
+    - [O]raycasting engine. no verticality?
+    - [O]render maze walls
+    - [ ]render players: position, direction, status, action
+    - [ ]render bullets
+
+- [O]setup leaderboard display
 
 #### maybe
 - save and list previously connected servers

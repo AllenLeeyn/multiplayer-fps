@@ -9,6 +9,7 @@ use fps_net::{ClientSocket, Message, MessageType, ignore_would_block};
 #[derive(Debug)]
 pub enum GameNetCommand {
     Send(Message),
+    SendReliable(Message),
     Shutdown,
 }
 
@@ -16,6 +17,8 @@ pub enum GameNetCommand {
 #[derive(Debug)]
 pub enum GameNetEvent {
     ClientList(Vec<String>),
+    GameStart,
+    GameEnd(String),
     Snapshot(Message),
     Chat(Message),
     Disconnected,
@@ -40,6 +43,11 @@ impl GameNetHandle {
         Ok(())
     }
 
+    pub fn send_reliable(&self, msg: Message) -> Result<(), Box<dyn std::error::Error>> {
+        self.cmd_tx.send(GameNetCommand::SendReliable(msg))?;
+        Ok(())
+    }
+
     pub fn try_recv(&self) -> Option<GameNetEvent> {
         self.evt_rx.try_recv().ok()
     }
@@ -55,7 +63,7 @@ impl GameNetHandle {
 /// Internal networking worker (lives in thread)
 struct GameNet {
     socket: ClientSocket,
-    server_addr: SocketAddr,
+    _server_addr: SocketAddr,
 
     cmd_rx: mpsc::Receiver<GameNetCommand>,
     evt_tx: mpsc::Sender<GameNetEvent>,
@@ -73,6 +81,9 @@ impl GameNet {
                     GameNetCommand::Send(msg) => {
                         let _ = self.socket.send(&msg);
                     }
+                    GameNetCommand::SendReliable(msg) => {
+                        let _ = self.socket.send_reliable(&msg);
+                    }
                     GameNetCommand::Shutdown => {
                         let _ = self.socket.send(&Message::new_disconnect_notice(0));
                         return;
@@ -81,13 +92,16 @@ impl GameNet {
             }
 
             // ---- receive network messages ----
-            match self.socket.recv() {
-                Ok(Some(msg)) => self.handle_message(msg),
-                Ok(None) => {}
-                Err(e) => {
-                    if ignore_would_block(e).is_err() {
-                        let _ = self.evt_tx.send(GameNetEvent::Disconnected);
-                        return;
+            loop {
+                match self.socket.recv() {
+                    Ok(Some(msg)) => self.handle_message(msg),
+                    Ok(None) => break, // no more packets
+                    Err(e) => {
+                        if ignore_would_block(e).is_err() {
+                            let _ = self.evt_tx.send(GameNetEvent::Disconnected);
+                            return;
+                        }
+                        break;
                     }
                 }
             }
@@ -103,7 +117,7 @@ impl GameNet {
     }
 
     fn handle_message(&mut self, msg: Message) {
-        println!("handling msg {:?}", msg.header);
+        //println!("handling msg {:?}", msg.header);
         match msg.header.msg_type {
             MessageType::Pong => {
                 let _rtt = self.socket.handle_pong(msg.header.sequence);
@@ -117,6 +131,7 @@ impl GameNet {
                 Ok(payload) => {
                     let ids = payload.clients;
 
+                    let _ = self.send_ack(msg);
                     let _ = self.evt_tx.send(GameNetEvent::ClientList(ids));
                 }
                 Err(e) => {
@@ -124,31 +139,53 @@ impl GameNet {
                 }
             },
 
-            /*
-                       MessageType::GameSnapshot => {
-                           let _ = self.evt_tx.send(GameNetEvent::Snapshot(msg));
-                       }
-            */
+            MessageType::StartGame => {
+                let _ = self.send_ack(msg);
+                let _ = self.evt_tx.send(GameNetEvent::GameStart);
+            }
+
+            MessageType::GameSnapShot => {
+                let _ = self.evt_tx.send(GameNetEvent::Snapshot(msg));
+            }
+
+            MessageType::GameEnd => {
+                let payload = msg.decode_game_end().unwrap();
+                let _ = self.evt_tx.send(GameNetEvent::GameEnd(payload.winner));
+                let _ = self.send_ack(msg);
+            }
+           
             _ => {}
         }
+    }
+
+    fn send_ack(&mut self, msg: Message) -> Result<(), Box<dyn std::error::Error>> {
+        let seq = self.socket.next_sequence();
+        let ack_seq = msg.header.sequence;
+        let msg = Message::new_ack(seq, ack_seq);
+        self.socket.send(&msg)?;
+        Ok(())
     }
 }
 
 /// ===== Public constructor =====
-pub fn start_game_net(socket: ClientSocket, server_addr: SocketAddr) -> GameNetHandle {
+pub fn start_game_net(socket: ClientSocket, _server_addr: SocketAddr) -> GameNetHandle {
     let (cmd_tx, cmd_rx) = mpsc::channel();
     let (evt_tx, evt_rx) = mpsc::channel();
 
     let net = GameNet {
         socket,
-        server_addr,
+        _server_addr,
         cmd_rx,
         evt_tx,
         last_ping: Instant::now(),
         ping_interval: Duration::from_secs(1),
     };
 
-    let join = thread::spawn(move || net.run());
+    let join = thread::spawn(move || {
+        if let Err(e) = std::panic::catch_unwind(|| net.run()) {
+            eprintln!("client_net thread crashed: {:?}", e);
+        }
+    });
 
     GameNetHandle {
         cmd_tx,

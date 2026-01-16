@@ -2,7 +2,7 @@ use std::any::Any;
 use std::fmt::{Debug, Formatter, Result};
 
 use super::super::{
-    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
+    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent, draw_point
 };
 
 /// Defines the source and type of rendering for the Panel component.
@@ -76,63 +76,18 @@ impl Component for Panel {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        let start_x = self.bounds.x.round() as usize;
-        let start_y = self.bounds.y.round() as usize;
-
-        const BYTES_PER_PIXEL: usize = 4;
-
         let draw_start_x = 0;
         let draw_start_y = 0;
-        let (draw_end_x, draw_end_y) = context.layout.size_as_usize();
-        let draw_width = draw_end_x;
+        let (draw_width, draw_height) = context.layout.size_as_u32();
 
-        for y in draw_start_y..draw_end_y {
-            for x in draw_start_x..draw_end_x {
+        for y in draw_start_y..draw_height {
+            for x in draw_start_x..draw_width {
                 let color = match &self.source {
                     RenderSource::SolidColor(c) => *c,
-
-                    RenderSource::Image(file_path) => {
-                        if let Some(image_data) = context.get_image_data(file_path) {
-                            const TILE_WIDTH: usize = 100;
-                            const BYTES_PER_IMAGE_PIXEL: usize = 4;
-
-                            let tile_x = (x - start_x) % TILE_WIDTH;
-                            let tile_y = (y - start_y) % TILE_WIDTH;
-
-                            let pixel_offset =
-                                (tile_y * TILE_WIDTH + tile_x) * BYTES_PER_IMAGE_PIXEL;
-
-                            if pixel_offset + 3 < image_data.len() {
-                                Color::new(
-                                    image_data[pixel_offset],
-                                    image_data[pixel_offset + 1],
-                                    image_data[pixel_offset + 2],
-                                    image_data[pixel_offset + 3],
-                                )
-                            } else {
-                                Color::RED
-                            }
-                        } else {
-                            Color::MAGENTA
-                        }
-                    }
-
-                    RenderSource::Function(f) => {
-                        let norm_x = (x as f64 - self.bounds.x) / self.bounds.w;
-                        let norm_y = (y as f64 - self.bounds.y) / self.bounds.h;
-
-                        f(norm_x, norm_y)
-                    }
+                    _ => Color::RED,
                 };
 
-                let offset = (y * draw_width + x) * BYTES_PER_PIXEL;
-
-                if offset + 3 < frame.len() {
-                    frame[offset] = color.r;
-                    frame[offset + 1] = color.g;
-                    frame[offset + 2] = color.b;
-                    frame[offset + 3] = color.a;
-                }
+                draw_point(frame, draw_width, draw_height, x, y, color);
             }
         }
     }

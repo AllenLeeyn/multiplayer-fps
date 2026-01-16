@@ -163,7 +163,6 @@ impl UIManager {
                 self.focused_component_id = None;
             }
         }
-
         events
     }
 
@@ -206,27 +205,9 @@ impl UIManager {
         let mut events = Vec::new();
 
         if *button == MouseButton::Left {
-            let current_focus = self.focused_component_id.clone();
-            let hit_id = self.hit_test_component(x, y);
+            self.set_focused_component(self.hovered_component_id.clone());
 
-            if hit_id != current_focus {
-                if let Some(old_id) = current_focus {
-                    if let Some(comp) = self.find_component_by_id_mut(&old_id) {
-                        comp.set_focus(false);
-                    }
-                }
-
-                if let Some(new_id) = hit_id.clone() {
-                    self.focused_component_id = Some(new_id.clone());
-                    if let Some(comp) = self.find_component_by_id_mut(&new_id) {
-                        comp.set_focus(true);
-                    }
-                } else {
-                    self.focused_component_id = None;
-                }
-            }
-
-            if let Some(hit_id) = hit_id {
+            if let Some(hit_id) = self.hovered_component_id.clone() {
                 if let Some(comp) = self.find_component_by_id_mut(&hit_id) {
                     events.extend(comp.handle_input(raw_event, Some((x, y))));
                 }
@@ -234,6 +215,30 @@ impl UIManager {
         }
 
         events
+    }
+
+    pub fn set_hovered_component(&mut self, id: Option<String>) {
+        self.hovered_component_id = id;
+    }
+
+    pub fn set_focused_component(&mut self, id: Option<String>) {
+        // If unchanged, do nothing
+        if self.focused_component_id != id {
+            // Clear old focus
+            if let Some(old_id) = self.focused_component_id.take() {
+                if let Some(comp) = self.find_component_by_id_mut(&old_id) {
+                    comp.set_focus(false);
+                }
+            }
+
+            // Set new focus
+            if let Some(new_id) = id.clone() {
+                if let Some(comp) = self.find_component_by_id_mut(&new_id) {
+                    comp.set_focus(true);
+                    self.focused_component_id = Some(new_id);
+                }
+            }
+        }
     }
 
     pub fn set_layer_visibility(&mut self, layer_id: &str, visible: bool) {

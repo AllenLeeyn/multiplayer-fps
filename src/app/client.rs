@@ -1,24 +1,65 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::time::Instant;
+
+use fps_net::message::{GameInputPayload, PlayerSnapshot};
+
+use super::Pos;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClientStatus {
+    Normal,
+    Invincible(f32), // Stores remaining invincibility time in seconds
+}
 
 /// Represents a player connected to the game
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Client {
     pub id: String, // Username or unique player ID
     pub score: u32, // Current score
+    pub pos: Pos,
+    
+    pub last_input: Option<GameInputPayload>,
+    pub last_seq: u32,
+
+    pub status: ClientStatus,
+    pub last_shot_time: Instant,
 }
 
 impl Client {
     pub fn new(id: String) -> Self {
-        Self { id, score: 0 }
+        Self {
+            id,
+            score: 0,
+            pos: Pos::default(),
+            last_input: None,
+            last_seq: 0,
+            status: ClientStatus::Normal,
+            last_shot_time: Instant::now(),
+        }
     }
 
     /// Reset score and ready status (e.g., new game)
     pub fn reset(&mut self) {
         self.score = 0;
+        self.status = ClientStatus::Normal;
+        self.pos.reset();
+    }
+
+    pub fn is_invincible(&self) -> bool {
+        matches!(self.status, ClientStatus::Invincible(_))
+    }
+
+    pub fn to_snapshot(&self) -> PlayerSnapshot {PlayerSnapshot { 
+            pos: self.pos.to_tuple(),
+            score: self.score,
+            // Map internal ClientStatus to the network-ready PlayerStatus
+            is_invincible: self.is_invincible(),
+        }
     }
 }
 
+#[derive(Debug, Clone)]
 /// Manages a list of connected clients
 pub struct ClientList {
     clients: HashMap<SocketAddr, Client>,
@@ -72,15 +113,11 @@ impl ClientList {
         self.clients.values().collect()
     }
 
-    /// Return a list of addresses of all clients
-    pub fn all_addresses(&self) -> Vec<SocketAddr> {
-        self.clients.keys().copied().collect()
+    pub fn iter(&self) -> impl Iterator<Item = &Client> {
+        self.clients.values()
     }
-
-    /// Update a client's score
-    pub fn update_score(&mut self, addr: &SocketAddr, score: u32) {
-        if let Some(client) = self.clients.get_mut(addr) {
-            client.score = score;
-        }
+    
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Client> {
+        self.clients.values_mut()
     }
 }

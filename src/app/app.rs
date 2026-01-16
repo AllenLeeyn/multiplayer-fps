@@ -1,17 +1,20 @@
+use crate::app::GameState;
 use crate::view::{View, ViewAction};
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread;
 use std::{collections::HashMap, time::Duration};
 
+use fps_levels::config::MazeSize;
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::WindowId;
+use winit::event::DeviceEvent;
 
-use super::{GameServer, ServerHandle, game::Game};
+use super::{GameServer, ServerHandle, game_client::Game, GameInputState};
 use fps_config::Config;
 use fps_levels::maze::Maze;
-use fps_ui::{AppDriver, ComponentUpdate, WindowEvent, components::MazeEditor, manager::UIManager};
+use fps_ui::{Rect, AppDriver, ComponentUpdate, WindowEvent, components::MazeEditor, manager::UIManager};
 
 use crate::{LOGICAL_HEIGHT, LOGICAL_WIDTH, PHYSICAL_HEIGHT, PHYSICAL_WIDTH};
 
@@ -27,6 +30,7 @@ pub struct App {
 
     pub server: Option<ServerHandle>,
     pub game: Option<Game>,
+    pub game_input: GameInputState
 }
 
 impl App {
@@ -50,6 +54,21 @@ impl App {
 
         // Show new
         self.manager.set_layer_visibility(view_id, true);
+
+        // Cursor handling
+        if let Some(driver) = self.driver.as_ref() {
+            let window = driver.window();
+
+            if view_id == "game" {
+                lock_cursor(window);
+                self.manager
+                    .set_hovered_component(Some("game_render".to_string()));
+                self.manager
+                    .set_focused_component(Some("game_render".to_string()));
+            } else {
+                unlock_cursor(window);
+            }
+        }
 
         // Update view components on activation
         if let Some(view) = self.views.get_mut(view_id) {
@@ -112,6 +131,22 @@ impl App {
                 }
             }
 
+            ViewAction::SendStartGame => {
+                self.send_start_game();
+            }
+
+            ViewAction::StartGame => {
+                self.activate_view("game");
+            }
+
+            ViewAction::GameEnd(winner) => {
+                self.activate_view("lobby");
+                self.manager.apply_updates(vec![ComponentUpdate::AppendTextVec(
+                    "lobby_chat_log".into(),
+                    vec![format!("[{} WINS]", winner)]
+                )]);
+            }
+
             _ => {}
         }
     }
@@ -171,8 +206,8 @@ impl App {
     pub fn validate_game_settings(
         &self,
         game_name: &str,
-        maze: &Maze,
-        target_score: &str,
+        maze: &mut Maze,
+        target_score: String,
     ) -> Result<(), String> {
         // Validate game name
         if game_name.trim().is_empty() {
@@ -193,9 +228,7 @@ impl App {
         }
 
         // Validate spawn points
-        let mut maze_clone = maze.clone();
-        maze_clone
-            .set_spawn_points()
+        maze.set_spawn_points()
             .map_err(|e| format!("Failed to set spawn points: {}", e))?;
 
         Ok(())
@@ -226,7 +259,9 @@ impl App {
     }
 
     fn host_game(&mut self, game_name: String, maze: Maze, target_score: String) {
-        if let Err(msg) = self.validate_game_settings(&game_name, &maze, &target_score) {
+        let mut new_maze = maze.clone();
+
+        if let Err(msg) = self.validate_game_settings(&game_name, &mut new_maze, target_score.clone()) {
             self.set_host_error(msg);
             return;
         }
@@ -239,7 +274,13 @@ impl App {
         // Start server
         let mut server_addr = String::new();
         if self.server.is_none() {
-            match start_server("0.0.0.0:9000", game_name, maze, target_score) {
+            match start_server(
+                "0.0.0.0:9000",
+                game_name,
+                new_maze,
+                target_score,
+                self.config.username.to_string(),
+            ) {
                 Ok((handle, public_addr)) => {
                     println!("Server started successfully {:?}", public_addr);
                     self.server = Some(handle);
@@ -292,16 +333,31 @@ impl App {
         self.activate_view("lobby");
 
         if let Some(game) = self.game.as_ref() {
-            self.manager.apply_updates(vec![ComponentUpdate::SetText(
-                "lobby_maze_settings".into(),
-                format!(
-                    "{:?} {:?} Maze | Max Players: {} | Win Socre: {}",
-                    game.maze.config.size,
-                    game.maze.config.difficulty,
-                    game.maze.config.max_players(),
-                    game.target_score,
+            let mini_map_layout = get_mini_map_layout(game.maze.config.size);
+
+            self.manager.apply_updates(vec![
+                ComponentUpdate::SetText(
+                    "lobby_maze_settings".into(),
+                    format!(
+                        "{:?} {:?} Maze | Max Players: {} | Win Score: {}",
+                        game.maze.config.size,
+                        game.maze.config.difficulty,
+                        game.maze.config.max_players(),
+                        game.target_score,
+                    ),
                 ),
-            )]);
+                ComponentUpdate::SetVisibility("start_game_button".into(), game.is_host),
+                ComponentUpdate::SetMaze("lobby_maze_view".to_string(), game.maze.clone()),
+                ComponentUpdate::SetMiniMapLayout("game_mini_map".to_string(), mini_map_layout),
+                ComponentUpdate::SetMaze("game_mini_map".to_string(), game.maze.clone()),
+                ComponentUpdate::SetMaze("game_render".to_string(), game.maze.clone()),
+                
+            ]);
+
+            if game.state == GameState::InGame {
+                self.activate_view("game");
+            }
+
         } else {
             self.set_host_error(format!("Game not found"));
             self.set_join_error(format!("Game not found"));
@@ -313,6 +369,22 @@ impl App {
             "join_error_label".into(),
             msg.into(),
         )]);
+    }
+
+    fn send_start_game(&mut self) {
+        if let Some(game) = self.game.as_mut() {
+            match game.send_game_start() {
+                Ok(_) => {}
+                Err(e) => {
+                    let msg = format!("Error: {:?}", e);
+                    self.set_host_error(msg.clone());
+                    self.set_join_error(msg);
+                }
+            }
+        } else {
+            self.set_host_error(format!("Game not found"));
+            self.set_join_error(format!("Game not found"));
+        }
     }
 }
 
@@ -337,6 +409,19 @@ impl ApplicationHandler for App {
         }
     }
 
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: DeviceEvent,
+    ) {
+        if let DeviceEvent::MouseMotion { delta } = event {
+            if let Some(game) = &self.game && game.state == GameState::InGame {
+                self.game_input.handle_mouse_motion(delta.0);
+            }
+        }
+    }
+
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         let ui_events = {
             let driver = match self.driver.as_mut() {
@@ -347,9 +432,16 @@ impl ApplicationHandler for App {
             self.manager.process_input(&event, driver.logical_cursor())
         };
 
-        if let Some(game) = &mut self.game {
+        if let Some(game) = self.game.as_mut() {
             let (updates, actions) = game.poll();
             self.manager.apply_updates(updates);
+            
+            if game.state == GameState::InGame {
+                self.game_input.handle_game_input(&event);
+                let payload = self.game_input.snapshot();
+                let _ = game.send_game_input(payload);
+            }
+
             for action in actions {
                 self.handle_view_action(action, event_loop);
             }
@@ -386,6 +478,20 @@ impl ApplicationHandler for App {
                     driver.render(&mut self.manager).unwrap();
                 }
             }
+
+            WindowEvent::Focused(focused) => {
+                if let Some(driver) = self.driver.as_ref() {
+                    let window = driver.window();
+
+                    if focused {
+                        if self.active_view.as_deref() == Some("game") {
+                            lock_cursor(window);
+                        }
+                    } else {
+                        unlock_cursor(window);
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -402,10 +508,11 @@ fn start_server(
     game_name: String,
     maze: Maze,
     target_score: String,
+    host_username: String,
 ) -> Result<(ServerHandle, String), Box<dyn std::error::Error>> {
     let mut maze = maze.clone();
     maze.set_spawn_points()?;
-    let server = GameServer::new(bind_addr, game_name, maze, target_score)?;
+    let server = GameServer::new(bind_addr, game_name, maze, target_score, host_username)?;
 
     let public_addr = server.public_addr()?;
 
@@ -413,8 +520,40 @@ fn start_server(
     let (cmd_tx, cmd_rx) = mpsc::channel();
 
     let join = thread::spawn(move || {
-        server.run(cmd_rx);
+        if let Err(e) = std::panic::catch_unwind(|| server.run(cmd_rx)) {
+            eprintln!("Server thread crashed: {:?}", e);
+        }
     });
 
     Ok((ServerHandle { cmd_tx, join }, public_addr))
+}
+
+use winit::window::{CursorGrabMode, Window};
+
+pub fn lock_cursor(window: &Window) -> bool {
+    let grabbed = window
+        .set_cursor_grab(CursorGrabMode::Locked)
+        .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined))
+        .is_ok();
+
+    if grabbed {
+        window.set_cursor_visible(false);
+    }
+
+    grabbed
+}
+
+pub fn unlock_cursor(window: &Window) {
+    let _ = window.set_cursor_grab(CursorGrabMode::None);
+    window.set_cursor_visible(true);
+}
+
+pub fn get_mini_map_layout(size: MazeSize) -> (Rect, f32, f32) {
+    let cell_px = 150/size.grid_size();
+    let player_px = cell_px/2;
+    let x = (LOGICAL_WIDTH as usize - cell_px * size.grid_size()) as f64;
+    let rect = Rect::new(x, 0.0, 150.0, 150.0);
+
+    println!("{:?}", (rect, cell_px as f32, player_px as f32));
+    (rect, cell_px as f32, player_px as f32)
 }

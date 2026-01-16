@@ -56,6 +56,20 @@ impl Maze {
         x >= 0 && y >= 0 && (x as usize) < self.width && (y as usize) < self.height
     }
 
+    pub fn is_walkable(&self, x: f32, y: f32, box_size: f32) -> bool {
+        // Convert float pos to grid coordinates
+        let xi = (x / box_size).floor() as isize;
+        let yi = (y / box_size).floor() as isize;
+
+        // Out-of-bounds check
+        if xi < 0 || yi < 0 || xi >= self.width as isize || yi >= self.height as isize {
+            return false;
+        }
+
+        let idx = yi as usize * self.width + xi as usize;
+        matches!(self.cells[idx], Cell::Empty)
+    }
+
     /// Converts (x, y) into a linear index.
     ///
     /// # Panics
@@ -90,6 +104,17 @@ impl Maze {
     #[inline]
     pub fn is_empty(&self, x: usize, y: usize) -> bool {
         self.get(x, y) == Cell::Empty
+    }
+
+    pub fn is_wall(&self, x: usize, y: usize) -> bool {
+        self.get(x, y) == Cell::Wall
+    }
+
+    pub fn get_cell_safe(&self, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || x >= self.width as i32 || y >= self.height as i32 {
+            return true; // Treat "out of bounds" as a wall to stop rays
+        }
+        self.get( x as usize, y as usize) == Cell::Wall
     }
 
     /// Returns all in-bounds 4-connected neighbors of (x, y).

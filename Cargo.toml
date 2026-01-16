@@ -9,15 +9,14 @@ fps_ui = { path = "crates/fps_ui" }
 fps_config = { path = "crates/fps_config" }
 fps_levels = { path = "crates/fps_levels" }
 fps_net = { path = "crates/fps_net" }
+rand = "0.9.2"
 
 [workspace]
 members = [
     ".",
     "crates/fps_audio",
     "crates/fps_config",
-    "crates/fps_core",
     "crates/fps_levels",
     "crates/fps_net",
-    "crates/fps_render",
     "crates/fps_ui",
 ]

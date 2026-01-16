@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use fps_config::Config;
 use fps_levels::maze::Maze;
 use fps_ui::{ComponentUpdate, UIEvent, manager::Layer};
@@ -17,6 +19,11 @@ pub enum ViewAction {
     JoinGame(String),
     LeaveLobby,
     SendChatMessage(String),
+    SendStartGame,
+    StartGame,
+    PlayerKeyboardInput(HashSet<String>), // keysPressed
+    PlayerMouseInput(bool), // left mouse clicked
+    GameEnd(String),
 }
 
 pub trait View {

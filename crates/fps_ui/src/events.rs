@@ -1,6 +1,8 @@
 use fps_levels::config::MazeSize;
 use fps_levels::maze::Maze;
+use std::collections::HashMap;
 use std::fmt::Debug;
+use super::Rect;
 
 // --- The UI Output Contract (Sent to Application) ---
 
@@ -20,7 +22,8 @@ pub enum ComponentUpdate {
     SetTextVec(String, Vec<String>),
     AppendText(String, String),
     AppendTextVec(String, Vec<String>),
-    SetValue(String, f32),            // (Component ID, New Value)
+    SetValue(String, f32), // (Component ID, New Value)
+    SetVisibility(String, bool),
     SetLayerVisibility(String, bool), // (Layer ID, Is Visible)
     SetPosition(String, f64, f64),    // (Component ID, New X, New Y)
     Resize { width: f64, height: f64 },
@@ -28,6 +31,13 @@ pub enum ComponentUpdate {
     SetFocus(String, bool),
     SetMazeSize(String, MazeSize),
     SetMaze(String, Maze),
+    SetMiniMapLayout(String, (Rect, f32, f32)),
+    SetMiniMapPlayer(
+        String,        // component id
+        (f32, f32, f32), // x, y, angle
+    ),
+    SetGameRender( String, HashMap<String, (f32, f32, f32, bool)>, Vec<(f32, f32, f32)>),
+    SetGameRenderCamera( String, (String, f32, f32, f32, bool))
 }
 
 impl ComponentUpdate {
@@ -39,11 +49,16 @@ impl ComponentUpdate {
             | ComponentUpdate::SetTextVec(id, _)
             | ComponentUpdate::AppendText(id, _)
             | ComponentUpdate::AppendTextVec(id, _)
+            | ComponentUpdate::SetVisibility(id, _)
             | ComponentUpdate::SetValue(id, _)
             | ComponentUpdate::SetPosition(id, _, _)
             | ComponentUpdate::SetFocus(id, _)
             | ComponentUpdate::SetHovered(id, _)
             | ComponentUpdate::SetMazeSize(id, _)
+            | ComponentUpdate::SetMiniMapPlayer(id, _)
+            | ComponentUpdate::SetMiniMapLayout(id, _)
+            | ComponentUpdate::SetGameRender(id, _, _)
+            | ComponentUpdate::SetGameRenderCamera(id, _)
             | ComponentUpdate::SetMaze(id, _) => Some(id),
 
             // These variants target layers or are global, and should be handled separately

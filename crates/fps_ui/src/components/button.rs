@@ -1,6 +1,6 @@
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, LayoutMetrics, MouseButton, Rect,
-    UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect,
+    UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 use ab_glyph::{Font, ScaleFont};
 use std::any::Any;
@@ -22,6 +22,7 @@ pub struct Button {
     // Interaction State
     is_hovered: bool,
     is_pressed: bool,
+    is_visible: bool,
     redraw_required: bool,
 }
 
@@ -46,6 +47,7 @@ impl Button {
             text_color,
             is_hovered: false,
             is_pressed: false,
+            is_visible: true,
             redraw_required: true,
         }
     }
@@ -106,7 +108,11 @@ impl Component for Button {
 
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool {
         match update {
-            ComponentUpdate::SetText(id, new_text) if id == &self.id => {
+            ComponentUpdate::SetVisibility(_, visibility) => {
+                self.is_visible = *visibility;
+                true
+            }
+            ComponentUpdate::SetText(_, new_text) => {
                 self.text = new_text.clone();
                 self.redraw_required = true;
                 true
@@ -131,28 +137,28 @@ impl Component for Button {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        const BPP: usize = 4;
+        if !self.is_visible {
+            return;
+        }
 
         let bounds_f64 = calculate_absolute_rect(&self.layout, &self.bounds, &context.layout);
         let (logical_width, logical_height) = context.layout.size_as_u32();
-        let draw_width = logical_width as usize;
 
         let abs_rect: IntRect = bounds_f64.to_int_rect();
         let bg_color = self.current_bg_color();
         let text_color = self.text_color;
 
         // 1. Draw Background
-        for y in abs_rect.y..(abs_rect.y + abs_rect.h as i32) {
-            for x in abs_rect.x..(abs_rect.x + abs_rect.w as i32) {
-                if x >= 0 && x < logical_width as i32 && y >= 0 && y < logical_height as i32 {
-                    let offset = (y as usize * draw_width + x as usize) * BPP;
-                    frame[offset] = bg_color.r;
-                    frame[offset + 1] = bg_color.g;
-                    frame[offset + 2] = bg_color.b;
-                    frame[offset + 3] = 255;
-                }
-            }
-        }
+        draw_filled_box(
+            frame,
+            logical_width,
+            logical_height,
+            abs_rect.x as u32,
+            abs_rect.y as u32,
+            abs_rect.w,
+            abs_rect.h,
+            bg_color,
+        );
 
         // 2. Draw Text (Vertically and Horizontally Centered)
         let text_to_draw = self.text.as_str();
