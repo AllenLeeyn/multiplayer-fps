@@ -1,3 +1,8 @@
+//! # Message Module
+//!
+//! Defines network message types, serialization, and helper methods for encoding/decoding
+//! game protocol messages.
+
 use bincode::config::standard;
 use bincode::serde::{decode_from_slice, encode_to_vec};
 use serde::{Deserialize, Serialize};
@@ -7,7 +12,17 @@ use std::error::Error;
 use super::{MessageHeader, MessageType, now_ms};
 use fps_levels::maze::Maze;
 
-/// Function that serializes any payload of type T into Vec<u8>
+/// Serializes any payload of type T into a byte vector.
+///
+/// Uses bincode with standard configuration for efficient binary serialization.
+///
+/// # Arguments
+///
+/// * `payload` - The serializable payload to encode
+///
+/// # Returns
+///
+/// A byte vector containing the serialized payload, or an error if serialization fails.
 pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Error>> {
     encode_to_vec(payload, standard())
         .map_err(|e| format!("Failed to encode payload: {}", e).into())
@@ -27,7 +42,11 @@ pub struct GameInfoPayload {
     pub state: String,
 }
 
-/// Generic network message
+/// Generic network message with header and optional payload.
+///
+/// All network communication uses this message type. The header contains metadata
+/// (message type, sequence number, timestamp), while the payload contains the
+/// actual message data (if any).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
     pub header: MessageHeader,
@@ -232,7 +251,10 @@ impl Message {
     }
     
     pub fn new_game_end(sequence: u32, winner: &str) -> Self {
-        let payload = encode_to_vec(&winner, standard())
+        let payload_obj = GameEndPayload {
+            winner: winner.to_string(),
+        };
+        let payload = encode_to_vec(&payload_obj, standard())
             .expect("Encoding game_end payload should never fail");
         Self::new(MessageType::GameEnd, sequence, Some(payload))
     }

@@ -1,5 +1,12 @@
+//! # Protocol Module
+//!
+//! Defines the network protocol message types and headers.
+
 use serde::{Deserialize, Serialize};
 
+/// Network message types for the game protocol.
+///
+/// Each variant represents a different type of message that can be sent over the network.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum MessageType {
     Ping = 0,
@@ -26,6 +33,9 @@ pub enum MessageType {
     GameEnd = 16
 }
 
+/// Message header containing metadata for network messages.
+///
+/// All messages include this header for routing, sequencing, and timing information.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct MessageHeader {
     pub msg_type: MessageType,

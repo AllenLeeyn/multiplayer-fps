@@ -1,3 +1,8 @@
+//! # Mini Map Component
+//!
+//! A top-down minimap component that displays the maze layout and player position.
+//! Uses cached rendering for efficient updates when only player position changes.
+
 use std::any::Any;
 use super::super::draw_triangle;
 
@@ -8,6 +13,38 @@ use super::super::{
     calculate_absolute_rect, draw_filled_bordered_box,
 };
 
+/// A top-down minimap component showing maze layout and player position.
+///
+/// The minimap caches the maze rendering for efficiency, only redrawing when
+/// the maze changes. Player position updates are fast as they only require
+/// drawing a triangle indicator.
+///
+/// # Features
+///
+/// - Cached maze rendering for performance
+/// - Player position indicator (red triangle)
+/// - Configurable cell and player sizes
+/// - Efficient updates when only position changes
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::MiniMap;
+/// use fps_levels::{maze::Maze, generator::generate_maze, config::MazeConfig};
+/// use fps_ui::{Rect, layout::LayoutMetrics};
+///
+/// let config = MazeConfig::new();
+/// let maze = generate_maze(&config, "Level 1".to_string());
+///
+/// let minimap = MiniMap::new(
+///     "minimap",
+///     maze,
+///     Rect::new(600.0, 10.0, 150.0, 150.0),
+///     LayoutMetrics::default(),
+///     5.0,   // cell size in pixels
+///     2.5,   // player size in pixels
+/// );
+/// ```
 #[derive(Debug)]
 pub struct MiniMap {
     id: String,
@@ -28,6 +65,16 @@ pub struct MiniMap {
 }
 
 impl MiniMap {
+    /// Creates a new minimap component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the component
+    /// * `maze` - The maze to display
+    /// * `bounds` - Component's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `cell_px` - Size of each cell in pixels
+    /// * `player_px` - Size of the player indicator in pixels
     pub fn new(
         id: impl Into<String>,
         maze: Maze,
@@ -57,6 +104,19 @@ impl MiniMap {
         }
     }
     
+    /// Builds a cached pixel buffer of the maze for efficient rendering.
+    ///
+    /// The cache is only rebuilt when the maze changes, allowing fast updates
+    /// when only the player position changes.
+    ///
+    /// # Arguments
+    ///
+    /// * `maze` - The maze to cache
+    /// * `cell_px` - Size of each cell in pixels
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(pixel_buffer, width, height, maze_size, cell_size)`.
     fn build_maze_cache(
         maze: &Maze,
         cell_px: u32,

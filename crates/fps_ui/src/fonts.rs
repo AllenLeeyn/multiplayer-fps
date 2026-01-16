@@ -1,3 +1,9 @@
+//! # Fonts Module
+//!
+//! Provides font loading, glyph caching, and text rendering functionality.
+//! Uses ab_glyph for font parsing and implements a glyph cache for efficient
+//! text rendering by avoiding repeated rasterization of the same characters.
+
 use super::{Color, draw_point};
 use ab_glyph::{Font, FontArc, GlyphId, PxScale, ScaleFont, point};
 use std::collections::HashMap;
@@ -5,7 +11,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-/// Stores the cached RGBA pixel data for a single character at a specific size.
+/// Cached glyph data for a single character at a specific size and color.
+///
+/// Stores the pre-rasterized pixel data to avoid expensive re-rasterization
+/// when the same character is drawn multiple times.
 #[derive(Debug)]
 pub struct CachedGlyph {
     pub pixels: Vec<u8>,
@@ -15,9 +24,14 @@ pub struct CachedGlyph {
     pub y_offset: i32,
 }
 
-// Key for the cache: (GlyphId, font_size_u32, Color)
+/// Cache key type: (GlyphId, quantized_size, Color)
 type CacheKey = (GlyphId, u32, Color);
 
+/// Manages font loading, glyph caching, and text rendering.
+///
+/// The font manager loads a single font file and provides efficient text
+/// rendering with automatic glyph caching. Each unique character/size/color
+/// combination is rasterized once and cached for subsequent use.
 #[derive(Debug)]
 pub struct FontManager {
     font: FontArc,
@@ -25,6 +39,15 @@ pub struct FontManager {
 }
 
 impl FontManager {
+    /// Creates a new font manager by loading a font file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to a TTF or OTF font file
+    ///
+    /// # Returns
+    ///
+    /// A new `FontManager` or an error if the font cannot be loaded.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = File::open(path.as_ref())?;
         let mut font_bytes = Vec::new();
@@ -39,10 +62,22 @@ impl FontManager {
         })
     }
 
+    /// Gets a reference to the primary font.
+    ///
+    /// Useful for advanced font operations that require direct font access.
     pub fn get_primary_font(&self) -> &FontArc {
         &self.font
     }
 
+    /// Calculates the scale factor for a given font size.
+    ///
+    /// # Arguments
+    ///
+    /// * `size_pixels` - Desired font size in pixels
+    ///
+    /// # Returns
+    ///
+    /// A `PxScale` value for use with ab_glyph.
     pub fn calculate_scale(&self, size_pixels: f32) -> PxScale {
         let scaled_size = size_pixels;
         PxScale {
@@ -51,8 +86,22 @@ impl FontManager {
         }
     }
 
-    /// Draws text using the character cache. Only the first time a character
-    /// is encountered at a given size is it rasterized (the expensive part).
+    /// Draws text to the frame buffer using cached glyphs.
+    ///
+    /// Text is rendered with automatic kerning, glyph caching, and proper
+    /// baseline alignment. Characters are rasterized on first use and cached
+    /// for subsequent draws.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - The RGBA frame buffer to draw into
+    /// * `text` - The text string to render
+    /// * `size_pixels` - Font size in pixels
+    /// * `color` - Text color
+    /// * `start_x` - Starting X coordinate (logical)
+    /// * `start_y` - Starting Y coordinate (logical)
+    /// * `logical_width` - Logical canvas width (for bounds checking)
+    /// * `logical_height` - Logical canvas height (for bounds checking)
     pub fn draw_text(
         &mut self,
         frame: &mut [u8],
@@ -137,7 +186,19 @@ impl FontManager {
         }
     }
 
-    /// Measures the total pixel width of a string for a given font size and scale.
+    /// Measures the total pixel width of a text string.
+    ///
+    /// Useful for centering text or calculating layout requirements.
+    /// Includes kerning adjustments for accurate measurements.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The text to measure
+    /// * `size_pixels` - Font size in pixels
+    ///
+    /// # Returns
+    ///
+    /// The total width in logical pixels.
     pub fn measure_text_width(&self, text: &str, size_pixels: f32) -> f64 {
         let font_arc = &self.font;
         let scale = self.calculate_scale(size_pixels);
@@ -164,7 +225,22 @@ impl FontManager {
     }
 }
 
-/// Performs expensive layout and rasterization for a single glyph and caches the result.
+/// Rasterizes a single glyph and returns cached data.
+///
+/// This is the expensive operation that converts a glyph outline into
+/// pixel data. The result is cached by `FontManager` to avoid repeated
+/// rasterization of the same character.
+///
+/// # Arguments
+///
+/// * `font_arc` - The font to use
+/// * `scale` - Font scale factor
+/// * `glyph_id` - The glyph identifier
+/// * `color` - The color to render the glyph
+///
+/// # Returns
+///
+/// Cached glyph data with pixel buffer and positioning offsets.
 pub fn rasterize_glyph_data(
     font_arc: &FontArc,
     scale: PxScale,

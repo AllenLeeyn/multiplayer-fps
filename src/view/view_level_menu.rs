@@ -1,3 +1,8 @@
+//! # Level Menu View
+//!
+//! View for the level editor. Allows users to create and edit custom mazes
+//! with different sizes and save them to the configuration.
+
 use fps_ui::{
     Color, ComponentUpdate, UIEvent,
     components::{Button, Label, MazeEditor, TextInput},
@@ -10,12 +15,16 @@ use super::{View, ViewAction};
 use fps_config::Config;
 use fps_levels::config::MazeSize;
 use fps_levels::maze::Maze;
+use crate::app::view_ids::views;
 
+/// Level editor view implementation.
 pub struct ViewLevelMenu {
+    /// Current maze name input value.
     maze_name: String,
 }
 
 impl ViewLevelMenu {
+    /// Creates a new level editor view.
     pub fn new() -> Self {
         Self {
             maze_name: String::new(),
@@ -25,7 +34,7 @@ impl ViewLevelMenu {
 
 impl View for ViewLevelMenu {
     fn id(&self) -> &str {
-        "level_menu"
+        views::LEVEL_MENU
     }
 
     fn layer(&self) -> Layer {
@@ -156,7 +165,7 @@ impl View for ViewLevelMenu {
         );
 
         Layer {
-            id: "level_menu".into(),
+            id: views::LEVEL_MENU.into(),
             z_index: 10,
             is_visible: false,
             is_modal: false,
@@ -198,7 +207,7 @@ impl View for ViewLevelMenu {
                     "maze_editor".to_string(),
                 )],
 
-                "back_level_button" => vec![ViewAction::SwitchTo("main_menu".to_string())],
+                "back_level_button" => vec![ViewAction::SwitchTo(views::MAIN_MENU.to_string())],
 
                 _ => vec![],
             },
@@ -213,7 +222,7 @@ impl View for ViewLevelMenu {
     }
 
     fn on_activate(&mut self, config: &Config) -> Vec<ComponentUpdate> {
-        let maze = Maze::new("UNKOWN_MAZE".to_string(), 15, 15);
+        let maze = Maze::new("UNKNOWN_MAZE".to_string(), 15, 15);
         self.maze_name = maze.name.clone();
 
         vec![

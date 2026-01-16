@@ -1,6 +1,10 @@
+//! # Game Render Component
+//!
+//! A 3D raycasted game world renderer using DDA (Digital Differential Analyzer) raycasting.
+//! Renders walls, floor, ceiling, players, and bullets from a first-person perspective.
+
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use fps_levels::maze::Maze;
@@ -8,13 +12,23 @@ use winit::event::ElementState;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 use super::super::{
-    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent, draw_point
+    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent, draw_point, draw_filled_box
 };
 
-const FOV: f32 = std::f32::consts::FRAC_PI_3; // 60°
-const BOX_SIZE: f32 = 100.0;
-const PLAYER_SIZE: f32 = 50.0;
+// 110 Degrees (Wide / Fast-paced FOV)
+const FOV: f32 = 110.0 * (std::f32::consts::PI / 180.0);
 
+/// Size of each maze cell in world units.
+const BOX_SIZE: f32 = 100.0;
+
+/// Size of player sprites in world units.
+const PLAYER_SIZE: f32 = 30.0;
+
+/// Camera offset distance behind the player (in world units).
+/// This moves the camera back slightly to improve visibility and feel.
+const CAMERA_OFFSET_DISTANCE: f32 = 15.0;
+
+/// Represents a player in the game world.
 #[derive(Debug)]
 pub struct Player {
     pub id: String,
@@ -22,11 +36,39 @@ pub struct Player {
     pub is_invincible: bool,
 }
 
+/// Represents a bullet in the game world.
 #[derive(Debug)]
 pub struct Bullet {
+    /// Bullet position: (x, y, angle)
     pub pos: (f32, f32, f32),
 }
 
+/// A 3D raycasted game world renderer.
+///
+/// Renders a first-person view of the game world using raycasting techniques.
+/// Supports rendering walls, floor, ceiling, players, and bullets with proper
+/// depth sorting and perspective projection.
+///
+/// # Rendering Features
+///
+/// - Raycasted walls with texture mapping
+/// - Textured floor and ceiling
+/// - Player sprites with depth sorting
+/// - Bullet rendering
+/// - Distance-based lighting and fog
+/// - Field of view (FOV) support
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::GameRender;
+/// use fps_ui::Rect;
+///
+/// let renderer = GameRender::new(
+///     "game_view".to_string(),
+///     Rect::new(0.0, 0.0, 800.0, 600.0),
+/// );
+/// ```
 #[derive(Debug)]
 pub struct GameRender {
     id: String,
@@ -40,6 +82,12 @@ pub struct GameRender {
 }
 
 impl GameRender {
+    /// Creates a new game render component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the component
+    /// * `bounds` - Rendering area bounds (relative coordinates)
     pub fn new(id: String, bounds: Rect) -> Self {
         Self {
             id,
@@ -53,16 +101,41 @@ impl GameRender {
         }
     }
 
-    /// Check if a key is currently held down
+    /// Checks if a key is currently held down.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Key identifier string
+    ///
+    /// # Returns
+    ///
+    /// `true` if the key is pressed, `false` otherwise.
     pub fn is_key_down(&self, key: &str) -> bool {
         self.pressed_keys.contains(key)
     }
 
-    /// Get a snapshot of all currently pressed keys
+    /// Gets a snapshot of all currently pressed keys.
+    ///
+    /// # Returns
+    ///
+    /// A cloned set of pressed key identifiers.
     pub fn pressed_keys(&self) -> HashSet<String> {
         self.pressed_keys.clone()
     }
 
+    /// Draws the 3D world using raycasting.
+    ///
+    /// Renders walls, floor, and ceiling with texture mapping. Fills the Z-buffer
+    /// for depth testing of sprites.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame buffer to draw into
+    /// * `context` - UI context for textures and layout
+    /// * `maze` - The maze to render
+    /// * `camera` - Camera/player position and angle
+    /// * `z_buffer` - Depth buffer (filled by this function)
+    /// * `dist_to_plane` - Distance to projection plane
     fn draw_world(
         &self,
         frame: &mut [u8],
@@ -82,13 +155,17 @@ impl GameRender {
 
         let cos_a = angle.cos();
         let sin_a = angle.sin();
+        
+        // Offset camera position backward for better visibility
+        let cam_x = px - CAMERA_OFFSET_DISTANCE * cos_a;
+        let cam_y = py - CAMERA_OFFSET_DISTANCE * sin_a;
 
         for x in 0..screen_w {
             let camera_x = 2.0 * x as f32 / screen_w as f32 - 1.0;
             let dir_x = cos_a + (-sin_a * camera_x * half_fov.tan());
             let dir_y = sin_a + (cos_a * camera_x * half_fov.tan());
 
-            let (dist, side, (hx, hy)) = cast_ray_dda(px, py, dir_x, dir_y, maze);
+            let (dist, side, (hx, hy)) = cast_ray_dda(cam_x, cam_y, dir_x, dir_y, maze);
             let corrected_dist = dist * (cos_a * dir_x + sin_a * dir_y);
             z_buffer[x as usize] = corrected_dist;
 
@@ -103,15 +180,15 @@ impl GameRender {
                     // CEILING
                     let p = (screen_h as f32 * 0.5) - y as f32;
                     let row_dist = (BOX_SIZE * 0.5 * dist_to_plane) / p;
-                    let tx = ((px + row_dist * dir_x) / BOX_SIZE).rem_euclid(1.0);
-                    let ty = ((py + row_dist * dir_y) / BOX_SIZE).rem_euclid(1.0);
+                    let tx = ((cam_x + row_dist * dir_x) / BOX_SIZE).rem_euclid(1.0);
+                    let ty = ((cam_y + row_dist * dir_y) / BOX_SIZE).rem_euclid(1.0);
                     draw_point(frame, screen_w, screen_h, x, y as u32, ceil_tex.sample(tx, ty));
                 } else if y >= draw_end {
                     // FLOOR
                     let p = y as f32 - (screen_h as f32 * 0.5);
                     let row_dist = (BOX_SIZE * 0.5 * dist_to_plane) / p;
-                    let tx = ((px + row_dist * dir_x) / BOX_SIZE).rem_euclid(1.0);
-                    let ty = ((py + row_dist * dir_y) / BOX_SIZE).rem_euclid(1.0);
+                    let tx = ((cam_x + row_dist * dir_x) / BOX_SIZE).rem_euclid(1.0);
+                    let ty = ((cam_y + row_dist * dir_y) / BOX_SIZE).rem_euclid(1.0);
                     draw_point(frame, screen_w, screen_h, x, y as u32, floor_tex.sample(tx, ty));
                 } else {
                     // WALL
@@ -125,6 +202,18 @@ impl GameRender {
         }
     }
 
+    /// Draws player sprites with depth sorting and perspective projection.
+    ///
+    /// Players are rendered as textured spheres with proper depth testing against
+    /// walls. Includes player names above sprites.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame buffer to draw into
+    /// * `context` - UI context for textures and fonts
+    /// * `camera` - Camera/player position and angle
+    /// * `z_buffer` - Depth buffer for occlusion testing
+    /// * `dist_to_plane` - Distance to projection plane
     fn draw_players(
         &self,
         frame: &mut [u8],
@@ -137,16 +226,20 @@ impl GameRender {
         let (screen_w, screen_h) = context.layout.size_as_u32();
         let half_fov_tan = (FOV * 0.5).tan();
 
+        let cos_a = cam_angle.cos();
+        let sin_a = cam_angle.sin();
+        
+        // Offset camera position backward for better visibility
+        let cam_x = px - CAMERA_OFFSET_DISTANCE * cos_a;
+        let cam_y = py - CAMERA_OFFSET_DISTANCE * sin_a;
+
         // 1. Sort players by distance (Back-to-Front)
         let mut sorted_players: Vec<_> = self.players.values().filter(|p| p.id != camera.id).collect();
         sorted_players.sort_by(|a, b| {
-            let da = (a.pos.0 - px).powi(2) + (a.pos.1 - py).powi(2);
-            let db = (b.pos.0 - px).powi(2) + (b.pos.1 - py).powi(2);
+            let da = (a.pos.0 - cam_x).powi(2) + (a.pos.1 - cam_y).powi(2);
+            let db = (b.pos.0 - cam_x).powi(2) + (b.pos.1 - cam_y).powi(2);
             db.partial_cmp(&da).unwrap()
         });
-
-        let cos_a = cam_angle.cos();
-        let sin_a = cam_angle.sin();
 
         for player in sorted_players {
             if player.is_invincible {
@@ -161,8 +254,8 @@ impl GameRender {
                 continue;
             }
 
-            let dx = player.pos.0 - px;
-            let dy = player.pos.1 - py;
+            let dx = player.pos.0 - cam_x;
+            let dy = player.pos.1 - cam_y;
 
             // Transform world coordinates to camera space
             let transform_x = cos_a * dy - sin_a * dx;
@@ -250,6 +343,67 @@ impl GameRender {
         }
     }
 
+    /// Draws bullet sprites with perspective projection.
+    ///
+    /// Bullets are rendered as small yellow circles that scale with distance.
+    /// Only visible bullets (in front of camera, not occluded) are drawn.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame buffer to draw into
+    /// * `context` - UI context for layout information
+    /// * `camera` - Camera/player position and angle
+    /// * `z_buffer` - Depth buffer for occlusion testing
+    /// * `dist_to_plane` - Distance to projection plane
+    /// Draws a crosshair at the center of the screen.
+    ///
+    /// The crosshair is a simple plus sign consisting of continuous horizontal
+    /// and vertical lines intersecting at the screen center.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Frame buffer to draw into
+    /// * `context` - UI context for layout information
+    fn draw_crosshair(&self, frame: &mut [u8], context: &mut UIMainContext) {
+        let (screen_w, screen_h) = context.layout.size_as_u32();
+        let center_x = screen_w / 2;
+        let center_y = screen_h / 2;
+
+        // Crosshair dimensions
+        const CROSSHAIR_LENGTH: u32 = 20;  // Length of each arm (half-length)
+        const CROSSHAIR_THICKNESS: u32 = 2;  // Thickness of the lines
+
+        let crosshair_color = Color::WHITE;
+
+        // Draw horizontal line (full width through center)
+        let h_start = center_x.saturating_sub(CROSSHAIR_LENGTH);
+        let h_width = (CROSSHAIR_LENGTH * 2).min(screen_w.saturating_sub(h_start));
+        draw_filled_box(
+            frame,
+            screen_w,
+            screen_h,
+            h_start,
+            center_y.saturating_sub(CROSSHAIR_THICKNESS / 2),
+            h_width,
+            CROSSHAIR_THICKNESS,
+            crosshair_color,
+        );
+
+        // Draw vertical line (full height through center)
+        let v_start = center_y.saturating_sub(CROSSHAIR_LENGTH);
+        let v_height = (CROSSHAIR_LENGTH * 2).min(screen_h.saturating_sub(v_start));
+        draw_filled_box(
+            frame,
+            screen_w,
+            screen_h,
+            center_x.saturating_sub(CROSSHAIR_THICKNESS / 2),
+            v_start,
+            CROSSHAIR_THICKNESS,
+            v_height,
+            crosshair_color,
+        );
+    }
+
     fn draw_bullets(
         &self,
         frame: &mut [u8],
@@ -263,10 +417,14 @@ impl GameRender {
         let half_fov_tan = (FOV * 0.5).tan();
         let cos_a = cam_angle.cos();
         let sin_a = cam_angle.sin();
+        
+        // Offset camera position backward for better visibility
+        let cam_x = px - CAMERA_OFFSET_DISTANCE * cos_a;
+        let cam_y = py - CAMERA_OFFSET_DISTANCE * sin_a;
 
         for bullet in &self.bullets {
-            let dx = bullet.pos.0 - px;
-            let dy = bullet.pos.1 - py;
+            let dx = bullet.pos.0 - cam_x;
+            let dy = bullet.pos.1 - cam_y;
 
             // Transform to camera space
             let transform_x = cos_a * dy - sin_a * dx;
@@ -357,6 +515,9 @@ impl Component for GameRender {
         if camera.is_invincible {
             draw_flash(frame);
         }
+
+        // Draw crosshair at center
+        self.draw_crosshair(frame, context);
     }
 
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool {
@@ -450,6 +611,25 @@ impl Component for GameRender {
     }
 }
 
+/// Casts a ray using DDA (Digital Differential Analyzer) algorithm.
+///
+/// Finds the first wall intersection along a ray from the given position and direction.
+/// Used for raycasted 3D rendering to determine wall distances and hit positions.
+///
+/// # Arguments
+///
+/// * `px` - Starting X position in world coordinates
+/// * `py` - Starting Y position in world coordinates
+/// * `dir_x` - Ray direction X component (normalized)
+/// * `dir_y` - Ray direction Y component (normalized)
+/// * `maze` - The maze to cast the ray through
+///
+/// # Returns
+///
+/// A tuple of:
+/// - `f32`: Distance to the wall
+/// - `i32`: Side hit (0 = X-side, 1 = Y-side)
+/// - `(f32, f32)`: Hit position (x, y) in world coordinates
 pub fn cast_ray_dda(px: f32, py: f32, dir_x: f32, dir_y: f32, maze: &Maze) -> (f32, i32, (f32, f32)) {
     let mut map_x = (px / BOX_SIZE).floor() as i32;
     let mut map_y = (py / BOX_SIZE).floor() as i32;
@@ -508,6 +688,14 @@ fn draw_point_darken(frame: &mut [u8], width: u32, _height: u32, x: u32, y: u32,
     frame[idx + 2] = (frame[idx + 2] as f32 * multiplier) as u8; // B
 }
 
+/// Draws a full-screen color overlay.
+///
+/// Used for screen effects like invincibility flash or damage indicators.
+///
+/// # Arguments
+///
+/// * `frame` - Frame buffer to draw into
+/// * `color` - Overlay color (typically semi-transparent)
 fn draw_screen_overlay(frame: &mut [u8], color: Color) {
     let alpha = color.value[3] as f32 / 255.0;
     let r = color.value[0] as f32;
@@ -522,6 +710,10 @@ fn draw_screen_overlay(frame: &mut [u8], color: Color) {
     }
 }
 
+/// Draws an invincibility flash effect.
+///
+/// Creates a pulsing white overlay to indicate invincibility status.
+/// Uses a time-based intensity calculation for the pulse effect.
 fn draw_flash(frame: &mut [u8]) {
     let time_ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)

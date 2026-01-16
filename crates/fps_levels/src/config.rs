@@ -1,6 +1,12 @@
+//! # Configuration Module
+//!
+//! Defines configuration types for maze generation including size, difficulty, and related settings.
+
 use serde::{Deserialize, Serialize};
 
 /// Represents the number of rooms per side in the maze.
+///
+/// Each room is 3x3 cells, so the total grid size is `room_count() * 3`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub enum MazeSize {
     XSmall, // 3x3 rooms
@@ -27,6 +33,10 @@ impl MazeSize {
     }
 }
 
+/// Difficulty level affecting maze generation parameters.
+///
+/// Primarily controls the loop chance during maze generation, which affects
+/// how many alternative paths exist in the maze.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Difficulty {
     Easy,
@@ -47,6 +57,9 @@ impl Difficulty {
     }
 }
 
+/// Complete configuration for maze generation.
+///
+/// Combines size and difficulty settings to control the procedural generation process.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 pub struct MazeConfig {
     pub size: MazeSize,

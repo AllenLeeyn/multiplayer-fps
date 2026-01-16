@@ -1,3 +1,8 @@
+//! # Lobby View
+//!
+//! View displayed in the game lobby. Shows game settings, connected players,
+//! chat interface, and controls for starting the game (host only).
+
 use super::{View, ViewAction};
 use fps_config::Config;
 use fps_levels::maze::Maze;
@@ -9,17 +14,28 @@ use fps_ui::{
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
+use crate::app::view_ids::views;
 
+/// Lobby view implementation.
 pub struct ViewLobby {
+    /// Current maze configuration.
     maze: Maze,
+    
+    /// Target score for winning the game.
     target_score: u32,
 
+    /// List of connected user names.
     users: Vec<String>,
+    
+    /// Chat messages (for internal tracking).
     messages: Vec<String>,
+    
+    /// Current chat input text.
     chat_input: String,
 }
 
 impl ViewLobby {
+    /// Creates a new lobby view.
     pub fn new() -> Self {
         Self {
             maze: Maze::default(),
@@ -31,6 +47,9 @@ impl ViewLobby {
         }
     }
 
+    /// Attempts to send a chat message if the input is not empty.
+    ///
+    /// Clears the chat input and returns an action to send the message.
     fn try_send_chat(&mut self) -> Vec<ViewAction> {
         let text = self.chat_input.trim().to_string();
         self.chat_input.clear();
@@ -45,7 +64,7 @@ impl ViewLobby {
 
 impl View for ViewLobby {
     fn id(&self) -> &str {
-        "lobby"
+        views::LOBBY
     }
 
     fn layer(&self) -> Layer {
@@ -197,7 +216,7 @@ impl View for ViewLobby {
         );
 
         Layer {
-            id: "lobby".into(),
+            id: views::LOBBY.into(),
             z_index: 20,
             is_visible: false,
             is_modal: true,
@@ -253,7 +272,7 @@ impl View for ViewLobby {
             ComponentUpdate::SetText(
                 "lobby_maze_settings".into(),
                 format!(
-                    "{:?} {:?} Maze | Max Players: {} | Win Socre: {}",
+                    "{:?} {:?} Maze | Max Players: {} | Win Score: {}",
                     self.maze.config.size,
                     self.maze.config.difficulty,
                     self.maze.config.max_players(),

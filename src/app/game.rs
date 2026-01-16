@@ -1,15 +1,19 @@
-use rand::rng;
-use rand::{Rng, seq::SliceRandom};
+//! # Game Logic Module
+//!
+//! Core game logic functions for player movement, bullet physics, collisions,
+//! and scoring. These functions operate on game entities and are used by both
+//! client (for prediction) and server (for authoritative updates).
+
+use rand::{Rng, rng, seq::SliceRandom};
 use std::time::{Duration, Instant};
 
 use crate::app::{
-    BOX_SIZE,
-    PLAYER_SIZE,
-    PLAYER_BACKSTEP_FACTOR,
-    PLAYER_RUN_SPD,
-    PLAYER_SIDESTEP_FACTOR,
-    PLAYER_WALK_SPD,
-    BULLET_SIZE, BULLET_SPD,
+    constants::{
+        physics::{BOX_SIZE, PLAYER_SIZE, BULLET_SIZE},
+        player::{WALK_SPEED, RUN_SPEED, SIDESTEP_FACTOR, BACKSTEP_FACTOR, INVINCIBLE_SPEED_MULTIPLIER},
+        bullet::{SPEED as BULLET_SPEED, SHOOT_COOLDOWN_MS, INVINCIBILITY_DURATION_SECONDS},
+        scoring::{HIT_PENALTY, HIT_REWARD},
+    },
     PlayerAction
 };
 
@@ -20,6 +24,15 @@ use super::{
 
 use fps_levels::maze::Maze;
 
+/// Initializes all players at random spawn points when a game starts.
+///
+/// Assigns each player to a random spawn point from the maze's spawn points
+/// with a random rotation angle. Used when transitioning from lobby to game.
+///
+/// # Arguments
+///
+/// * `players` - The list of clients to spawn
+/// * `maze` - The maze containing spawn points
 pub fn game_on_init(players: &mut ClientList, maze: &Maze) {
     let mut rng = rng();
 
@@ -35,6 +48,15 @@ pub fn game_on_init(players: &mut ClientList, maze: &Maze) {
     }
 }
 
+/// Spawns a single client at a random spawn point.
+///
+/// Used when a client joins mid-game. Selects a random spawn point and
+/// assigns the client to it with a random rotation angle.
+///
+/// # Arguments
+///
+/// * `client` - The client to spawn
+/// * `maze` - The maze containing spawn points
 pub fn spawn_client_randomly(client: &mut Client, maze: &Maze) {
     use rand::Rng;
 
@@ -53,7 +75,16 @@ pub fn spawn_client_randomly(client: &mut Client, maze: &Maze) {
     };
 }
 
-pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>, dt: f32) {
+/// Updates invincibility status based on elapsed time.
+///
+/// Decrements the remaining invincibility time and transitions back to
+/// normal status when the time expires.
+///
+/// # Arguments
+///
+/// * `client` - The client whose invincibility to update
+/// * `dt` - Elapsed time in seconds since last update
+fn update_invincibility(client: &mut Client, dt: f32) {
     if let ClientStatus::Invincible(ref mut remaining_time) = client.status {
         *remaining_time -= dt;
         
@@ -63,20 +94,28 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
             println!("[Game] {} is no longer invincible", client.id);
         }
     }
-    
-    let Some(input) = &client.last_input else {
-        return;
-    };
+}
 
-    client.pos.rotate(input.mouse_dx * dt);
-
-    let spd_modifier = if client.is_invincible() { 1.5 } else { 1.0 };
-    let base_speed = player_speed(input.is_running);
-    let move_step = base_speed * dt * spd_modifier;
-
-    let (orig_x, orig_y, _) = client.pos.to_tuple();
-
-    for raw in &input.actions {
+/// Handles player movement and shooting based on input actions.
+///
+/// Processes player actions (movement, shooting) and applies them to the
+/// client's position and bullet list. Respects cooldown for shooting.
+///
+/// # Arguments
+///
+/// * `client` - The client to update
+/// * `actions` - Set of active player actions (serialized as bytes)
+/// * `_is_running` - Whether the player is running (currently unused but kept for future use)
+/// * `move_step` - Distance to move this frame
+/// * `bullets` - List of bullets to potentially add new shots to
+fn handle_player_movement(
+    client: &mut Client,
+    actions: &std::collections::HashSet<u8>,
+    _is_running: bool,
+    move_step: f32,
+    bullets: &mut Vec<Bullet>,
+) {
+    for raw in actions {
         let Some(action) = PlayerAction::from_byte(*raw) else {
             continue;
         };
@@ -85,14 +124,14 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
             PlayerAction::MoveUp => 
                 client.pos.move_forward(move_step),
             PlayerAction::MoveDown => 
-                client.pos.move_backward(move_step * PLAYER_BACKSTEP_FACTOR),
+                client.pos.move_backward(move_step * BACKSTEP_FACTOR),
             PlayerAction::MoveRight => 
-                client.pos.strafe(move_step * PLAYER_SIDESTEP_FACTOR),
+                client.pos.strafe(move_step * SIDESTEP_FACTOR),
             PlayerAction::MoveLeft => 
-                client.pos.strafe(-move_step * PLAYER_SIDESTEP_FACTOR),
+                client.pos.strafe(-move_step * SIDESTEP_FACTOR),
             PlayerAction::Shoot => {
                 let now = Instant::now();
-                let cooldown = Duration::from_millis(300); // 0.3 second cooldown
+                let cooldown = Duration::from_millis(SHOOT_COOLDOWN_MS);
 
                 if now.duration_since(client.last_shot_time) >= cooldown {
                     bullets.push(Bullet {
@@ -105,42 +144,130 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
             _ => {}
         }
     }
+}
 
-    // Half-size radius for collision checks
+/// Checks if a position collides with walls.
+///
+/// Performs collision detection by checking the four corners of a bounding box
+/// against the maze. Used for player collision detection.
+///
+/// # Arguments
+///
+/// * `maze` - The maze to check against
+/// * `x` - X coordinate (world units)
+/// * `y` - Y coordinate (world units)
+/// * `half_size` - Half the size of the bounding box (player radius)
+///
+/// # Returns
+///
+/// `true` if all corners are walkable (no collision), `false` if any corner hits a wall.
+fn check_collision_at(maze: &Maze, x: f32, y: f32, half_size: f32) -> bool {
+    maze.is_walkable(x - half_size, y - half_size, BOX_SIZE)
+        && maze.is_walkable(x + half_size, y - half_size, BOX_SIZE)
+        && maze.is_walkable(x - half_size, y + half_size, BOX_SIZE)
+        && maze.is_walkable(x + half_size, y + half_size, BOX_SIZE)
+}
+
+/// Resolves collisions by reverting position if blocked.
+///
+/// Checks X and Y axis movement separately and reverts movement on the
+/// blocked axis. This allows sliding along walls instead of getting stuck.
+///
+/// # Arguments
+///
+/// * `client` - The client whose position to check
+/// * `maze` - The maze to check against
+/// * `orig_x` - Original X position before movement
+/// * `orig_y` - Original Y position before movement
+fn resolve_collisions(client: &mut Client, maze: &Maze, orig_x: f32, orig_y: f32) {
     let half_size = PLAYER_SIZE / 2.0;
 
     // --- X-axis collision ---
-    if !maze.is_walkable(client.pos.x - half_size, orig_y - half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x + half_size, orig_y - half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x - half_size, orig_y + half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x + half_size, orig_y + half_size, BOX_SIZE)
-    {
+    if !check_collision_at(maze, client.pos.x, orig_y, half_size) {
         client.pos.x = orig_x; // undo X if blocked
     }
 
     // --- Y-axis collision ---
-    if !maze.is_walkable(client.pos.x - half_size, client.pos.y - half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x + half_size, client.pos.y - half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x - half_size, client.pos.y + half_size, BOX_SIZE)
-        || !maze.is_walkable(client.pos.x + half_size, client.pos.y + half_size, BOX_SIZE)
-    {
+    if !check_collision_at(maze, client.pos.x, client.pos.y, half_size) {
         client.pos.y = orig_y; // undo Y if blocked
     }
-
 }
 
+/// Updates a player's state for one frame.
+///
+/// Processes invincibility countdown, applies input-based movement and rotation,
+/// handles shooting, and resolves collisions. This is the main player update function
+/// called each server tick.
+///
+/// # Arguments
+///
+/// * `client` - The client to update
+/// * `maze` - The maze for collision detection
+/// * `bullets` - List of bullets to add new shots to
+/// * `dt` - Elapsed time in seconds since last update
+pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>, dt: f32) {
+    update_invincibility(client, dt);
+    
+    let Some(input) = &client.last_input else {
+        return;
+    };
+
+    // Extract data from input to avoid borrow conflicts
+    let actions = input.actions.clone();
+    let is_running = input.is_running;
+    let mouse_dx = input.mouse_dx;
+
+    client.pos.rotate(mouse_dx * dt);
+
+    let spd_modifier = if client.is_invincible() { INVINCIBLE_SPEED_MULTIPLIER } else { 1.0 };
+    let base_speed = player_speed(is_running);
+    let move_step = base_speed * dt * spd_modifier;
+
+    let (orig_x, orig_y, _) = client.pos.to_tuple();
+
+    handle_player_movement(client, &actions, is_running, move_step, bullets);
+    resolve_collisions(client, maze, orig_x, orig_y);
+}
+
+/// Gets the base player movement speed.
+///
+/// # Arguments
+///
+/// * `is_running` - Whether the player is holding the run key
+///
+/// # Returns
+///
+/// The movement speed in world units per second.
 #[inline]
 fn player_speed(is_running: bool) -> f32 {
     if is_running {
-        PLAYER_RUN_SPD
+        RUN_SPEED
     } else {
-        PLAYER_WALK_SPD
+        WALK_SPEED
     }
 }
 
+/// Updates a bullet's position and checks for collisions.
+///
+/// Moves the bullet forward, checks for wall and player collisions, and returns
+/// the bullet's new status. Used each server tick for all active bullets.
+///
+/// # Arguments
+///
+/// * `bullet` - The bullet to update
+/// * `maze` - The maze for wall collision detection
+/// * `clients` - The list of clients for player collision detection
+/// * `dt` - Elapsed time in seconds since last update
+///
+/// # Returns
+///
+/// The new bullet status:
+/// - `Active` if the bullet is still moving
+/// - `HitWall` if the bullet hit a wall
+/// - `HitPlayer(id)` if the bullet hit a player (returns player ID)
 pub fn update_bullet(bullet: &mut Bullet, maze: &Maze, clients: &mut ClientList, dt: f32) -> BulletStatus {
     // 1. Move the bullet forward
-    bullet.pos.move_forward(BULLET_SPD * dt);
+    bullet.pos.move_forward(BULLET_SPEED * dt);
     
     let bullet_radius = BULLET_SIZE / 2.0;
     let player_radius = PLAYER_SIZE / 2.0;
@@ -184,9 +311,24 @@ pub fn update_bullet(bullet: &mut Bullet, maze: &Maze, clients: &mut ClientList,
     BulletStatus::Active
 }
 
+/// Handles the result of a bullet hitting a player.
+///
+/// Applies scoring changes (reward to attacker, penalty to victim) and sets
+/// invincibility on the victim. This is the server's authoritative handling
+/// of a successful hit.
+///
+/// # Arguments
+///
+/// * `attacker_id` - ID of the player who shot the bullet
+/// * `victim_id` - ID of the player who was hit
+/// * `clients` - The list of clients to update
+///
+/// # Returns
+///
+/// The attacker's new score after the hit.
 pub fn handle_bullet_hit(
-    attacker_id: &str, 
-    victim_id: &str, 
+    attacker_id: &str,
+    victim_id: &str,
     clients: &mut ClientList,
 ) -> u32 {
     // 1. Find victim
@@ -194,10 +336,10 @@ pub fn handle_bullet_hit(
         // Double check status (though update_bullet filters this, it's safe)
         if !victim.is_invincible() {
             // Apply Penalty
-            victim.score = victim.score.saturating_sub(5);
+            victim.score = victim.score.saturating_sub(HIT_PENALTY);
             
-            // Set 2 seconds of invincibility
-            victim.status = ClientStatus::Invincible(2.0);
+            // Set invincibility duration
+            victim.status = ClientStatus::Invincible(INVINCIBILITY_DURATION_SECONDS);
             
             println!("[SERVER] {} hit {}. Victim score: {}", attacker_id, victim_id, victim.score);
         }
@@ -206,7 +348,7 @@ pub fn handle_bullet_hit(
     let mut score = 0;
     // 2. Reward Attacker
     if let Some(attacker) = clients.iter_mut().find(|c| c.id == attacker_id) {
-        attacker.score += 10;
+        attacker.score += HIT_REWARD;
         score = attacker.score;
     }
     score

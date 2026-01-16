@@ -1,3 +1,9 @@
+//! # Main Menu View
+//!
+//! The main menu view provides the entry point to the application. It displays
+//! the game title, allows username input, and provides buttons to join/host games
+//! or access the level editor.
+
 use fps_config::Config;
 use fps_ui::{
     Color, ComponentUpdate, UIEvent,
@@ -8,12 +14,20 @@ use fps_ui::{
 };
 
 use super::{View, ViewAction};
+use crate::app::view_ids::views;
 
+/// Main menu view implementation.
 pub struct ViewMainMenu {
+    /// Current username input value.
     pub username: String,
 }
 
 impl ViewMainMenu {
+    /// Creates a new main menu view.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Initial username value
     pub fn new(username: String) -> Self {
         Self { username }
     }
@@ -21,7 +35,7 @@ impl ViewMainMenu {
 
 impl View for ViewMainMenu {
     fn id(&self) -> &str {
-        "main_menu"
+        views::MAIN_MENU
     }
 
     fn layer(&self) -> Layer {
@@ -132,7 +146,7 @@ impl View for ViewMainMenu {
         );
 
         Layer {
-            id: "main_menu".into(),
+            id: views::MAIN_MENU.into(),
             z_index: 10,
             is_visible: true,
             is_modal: false,
@@ -152,9 +166,9 @@ impl View for ViewMainMenu {
     fn handle_ui_events(&mut self, event: &UIEvent) -> Vec<ViewAction> {
         match event {
             UIEvent::ButtonClicked(id) => match id.as_str() {
-                "join_button" => vec![ViewAction::SwitchTo("join_menu".to_string())],
-                "host_button" => vec![ViewAction::SwitchTo("host_menu".to_string())],
-                "level_button" => vec![ViewAction::SwitchTo("level_menu".to_string())],
+                "join_button" => vec![ViewAction::SwitchTo(views::JOIN_MENU.to_string())],
+                "host_button" => vec![ViewAction::SwitchTo(views::HOST_MENU.to_string())],
+                "level_button" => vec![ViewAction::SwitchTo(views::LEVEL_MENU.to_string())],
                 "quit_button" => vec![ViewAction::QuitApp],
                 _ => vec![],
             },

@@ -1,3 +1,7 @@
+//! # Maze Module
+//!
+//! Core data structures and operations for maze representation and manipulation.
+
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -6,22 +10,33 @@ use std::error::Error;
 use super::config::MazeConfig;
 
 /// A single maze cell.
-/// Wall blocks movement and rays.
-/// Empty is fully walkable.
+///
+/// - `Wall`: Blocks movement and rays
+/// - `Empty`: Fully walkable space
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Cell {
+    /// Solid wall that blocks movement and raycasting
     Wall = 0,
+    /// Empty space that is walkable
     Empty = 1,
 }
 
 /// A generated maze level.
 ///
 /// The maze is a rectangular grid stored in row-major order.
-/// Coordinate system:
-/// - (0, 0) is the top-left corner
-/// - x increases to the right
-/// - y increases downward
+///
+/// ## Coordinate System
+///
+/// - `(0, 0)` is the top-left corner
+/// - `x` increases to the right
+/// - `y` increases downward
+///
+/// ## Invariants
+///
+/// - `cells.len() == width * height` (always true)
+/// - All `Empty` cells form a single connected component (guaranteed by generator)
+/// - All spawn points are on `Empty` cells
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Maze {
     pub name: String,

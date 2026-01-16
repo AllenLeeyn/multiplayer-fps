@@ -1,3 +1,60 @@
+//! # `fps_ui` - Single-Threaded UI Toolkit
+//!
+//! A high-performance, single-threaded UI toolkit built on top of `winit` and `pixels`.
+//! Designed for game UIs with a caller-driven architecture where the application maintains
+//! full control over game state and event execution.
+//!
+//! ## Design Philosophy
+//!
+//! The crate extends low-level functionalities into a unified, high-level UI system:
+//!
+//! - **`winit`** → Event handling: Translates raw OS events into structured `UIEvent` messages
+//! - **`pixels`** → Drawing: Provides abstract rendering functions atop raw pixel buffers
+//! - **`glam`** → Geometry: Foundation for positioning, scaling, and hit-testing
+//!
+//! ## Architecture
+//!
+//! ### Single-Threaded Execution
+//!
+//! All UI logic runs on a single thread, driven by the winit event loop. The application
+//! calls `UIManager` methods within the winit loop, maintaining full control.
+//!
+//! ### Caller-Driven Loop
+//!
+//! The crate does not manage application logic. Instead:
+//!
+//! 1. `UIManager::process_input()` translates raw winit events into `UIEvent` messages
+//! 2. The application consumes and handles these events (e.g., switching game modes)
+//! 3. The application updates components via `UIManager::apply_updates()`
+//!
+//! ### Layered Component System
+//!
+//! - **Layers**: Organize components with Z-ordering and visibility control
+//! - **Components**: Reusable UI elements (buttons, labels, text inputs, etc.)
+//! - **Layout**: Flexible positioning with anchor points and relative sizing
+//!
+//! ## Modules
+//!
+//! - [`components`]: UI component implementations (Button, Label, TextInput, etc.)
+//! - [`context`]: Global UI context and resources
+//! - [`driver`]: Window and rendering driver
+//! - [`events`]: UI event types and component updates
+//! - [`fonts`]: Font loading and management
+//! - [`geometry`]: Geometric primitives (Rect, IntRect)
+//! - [`layout`]: Layout system with anchors and metrics
+//! - [`manager`]: UI manager and layer orchestration
+//!
+//! ## Example
+//!
+//! ```rust,no_run
+//! use fps_ui::{UIMainContext, UIManager, components::Button};
+//!
+//! let context = UIMainContext::new("font.ttf", 800.0, 600.0)?;
+//! let mut manager = UIManager::new(context);
+//!
+//! // Add components and handle events...
+//! ```
+
 pub mod components;
 pub mod context;
 pub mod driver;

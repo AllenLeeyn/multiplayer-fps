@@ -1,10 +1,24 @@
+//! # Game Server Module
+//!
+//! Implements the authoritative game server that runs in a separate thread.
+//! Manages client connections, game state updates, bullet physics, and scoring.
+//!
+//! The server runs a game loop that:
+//! - Processes incoming client messages
+//! - Updates player positions based on inputs
+//! - Updates bullet physics and checks collisions
+//! - Broadcasts game state snapshots to all clients
+//! - Handles game state transitions (lobby, in-game, finished)
+
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime, Instant};
 
-use super::{Client, ClientList, GameState, 
+use super::{
+    constants::server,
+    Client, ClientList, GameState, 
     game::{
         game_on_init,
         spawn_client_randomly,
@@ -28,24 +42,40 @@ use fps_net::message::{
 use fps_net::protocol::MessageType;
 use fps_net::server_socket::ServerSocket;
 
-/// Commands sent *to* the server thread
+/// Commands sent to the server thread from the main thread.
+///
+/// Used for controlling the server (e.g., shutting down).
+#[derive(Debug)]
 pub enum ServerCommand {
+    /// Shutdown the server thread.
     Shutdown,
 }
 
-/// Handle owned by the App
+/// Handle for interacting with the server thread.
+///
+/// Provides methods to control the server thread from the main thread.
 pub struct ServerHandle {
+    /// Channel sender for sending commands to the server thread.
     pub cmd_tx: mpsc::Sender<ServerCommand>,
+    
+    /// Join handle for the server thread (for cleanup).
     pub join: thread::JoinHandle<()>,
 }
 
 impl ServerHandle {
+    /// Shuts down the server thread gracefully.
+    ///
+    /// Sends a shutdown command and waits for the thread to finish.
     pub fn shutdown(self) {
         let _ = self.cmd_tx.send(ServerCommand::Shutdown);
         let _ = self.join.join();
     }
 }
 
+/// Represents the game server that manages a game session.
+///
+/// Runs in a separate thread and maintains authoritative game state.
+/// All clients connect to the server and receive periodic snapshots.
 pub struct GameServer {
     socket: ServerSocket,
     clients: ClientList,
@@ -60,6 +90,22 @@ pub struct GameServer {
 }
 
 impl GameServer {
+    /// Creates a new game server instance.
+    ///
+    /// Initializes the server socket and game configuration. Does not start
+    /// the server loop - that is done via `run()` in a separate thread.
+    ///
+    /// # Arguments
+    ///
+    /// * `bind_addr` - Address to bind the server socket to (e.g., "0.0.0.0:9000")
+    /// * `game_name` - Name of the game session
+    /// * `maze` - The maze to use for the game
+    /// * `target_score` - Target score string to parse (win condition)
+    /// * `host_username` - Username of the host player
+    ///
+    /// # Returns
+    ///
+    /// A new `GameServer` instance if initialization succeeds, error otherwise.
     pub fn new(
         bind_addr: &str,
         game_name: String,
@@ -67,7 +113,7 @@ impl GameServer {
         target_score: String,
         host_username: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let socket = ServerSocket::bind(bind_addr, Duration::from_secs(5))?;
+        let socket = ServerSocket::bind(bind_addr, Duration::from_secs(server::CLIENT_TIMEOUT_SECONDS))?;
 
         let target_score = target_score
             .parse::<u32>()
@@ -85,16 +131,35 @@ impl GameServer {
         })
     }
 
-    /// Remove a client when they disconnect or timeout
+    /// Removes a client when they disconnect or timeout.
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - Socket address of the client to remove
     pub fn remove_client(&mut self, addr: &SocketAddr) {
         self.clients.remove_client(addr);
     }
 
+    /// Gets the public address of the server.
+    ///
+    /// Returns the address that clients can use to connect. Useful for
+    /// displaying connection information to the host.
+    ///
+    /// # Returns
+    ///
+    /// The public address string, or error if unavailable.
     pub fn public_addr(&self) -> Result<String, Box<dyn Error>> {
         self.socket.public_addr()
     }
 
-    /// Broadcast a message to all connected clients
+    /// Broadcasts an unreliable message to all connected clients.
+    ///
+    /// Unreliable messages are not retried if lost. Suitable for high-frequency
+    /// messages like game snapshots.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to broadcast
     pub fn broadcast(&mut self, msg: &Message) {
         if let Err(failed_addrs) = self.socket.broadcast(msg) {
             eprintln!(
@@ -104,8 +169,16 @@ impl GameServer {
         }
     }
 
+    /// Broadcasts a reliable message to all connected clients.
+    ///
+    /// Reliable messages are retried until acknowledged. Use for important
+    /// messages like game state changes or chat.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to broadcast
     pub fn broadcast_reliable(&mut self, msg: &Message) {
-        if let Err(failed_addrs) = self.socket.broadcast_relibale(msg) {
+        if let Err(failed_addrs) = self.socket.broadcast_reliable(msg) {
             eprintln!(
                 "Failed to broadcast message to some clients: {:?}",
                 failed_addrs
@@ -113,7 +186,14 @@ impl GameServer {
         }
     }
 
-    /// Broadcast a chat message to all connected clients
+    /// Broadcasts a chat message to all connected clients.
+    ///
+    /// Creates a chat message payload and broadcasts it to all clients.
+    ///
+    /// # Arguments
+    ///
+    /// * `username` - Username of the sender
+    /// * `text` - Message text
     pub fn broadcast_chat(&mut self, username: &str, text: &str) {
         let payload = ChatMessagePayload {
             username: username.to_string(),
@@ -139,8 +219,21 @@ impl GameServer {
         self.broadcast_reliable(&msg);
     }
 
+    /// Runs the server game loop in the current thread.
+    ///
+    /// This is the main server loop that:
+    /// - Processes incoming client messages
+    /// - Updates game state (players, bullets) at fixed intervals
+    /// - Broadcasts snapshots to all clients
+    /// - Handles game state transitions
+    ///
+    /// Runs until a shutdown command is received. Should be run in a separate thread.
+    ///
+    /// # Arguments
+    ///
+    /// * `cmd_rx` - Receiver for server commands (e.g., shutdown)
     pub fn run(mut self, cmd_rx: mpsc::Receiver<ServerCommand>) {
-        let tick_duration = Duration::from_millis(16); // ~1/60th of a second
+        let tick_duration = server::TICK_DURATION;
         let mut last_time = Instant::now();
 
         println!(

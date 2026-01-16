@@ -84,8 +84,8 @@ impl ServerSocket {
         Ok(failed)
     }
 
-    /// Broadcast a message to all connected clients
-    pub fn broadcast_relibale(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>> {
+    /// Broadcast a reliable message to all connected clients
+    pub fn broadcast_reliable(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>> {
         let addrs: Vec<_> = self.clients.keys().copied().collect();
         let mut failed = Vec::new();
         for addr in addrs {

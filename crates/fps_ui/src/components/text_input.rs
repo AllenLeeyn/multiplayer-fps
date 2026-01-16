@@ -1,12 +1,48 @@
-use ab_glyph::{Font, ScaleFont};
+//! # Text Input Component
+//!
+//! A single-line editable text input field with cursor support, placeholder text,
+//! and keyboard input handling.
+
 use std::any::Any;
+
+use ab_glyph::{Font, ScaleFont};
 
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, KeyCode, LayoutMetrics, PhysicalKey,
     Rect, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 
-/// A standard single-line text input field component.
+/// A single-line text input field component.
+///
+/// Supports text editing with cursor navigation, backspace/delete, and Enter key
+/// submission. Displays placeholder text when empty and not focused.
+///
+/// # Features
+///
+/// - Cursor navigation with arrow keys
+/// - Character insertion and deletion
+/// - Placeholder text display
+/// - Focus-based visual feedback
+/// - Maximum input length limit
+/// - Text change and submission events
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::TextInput;
+/// use fps_ui::{Color, Rect, layout::LayoutMetrics};
+///
+/// let input = TextInput::new(
+///     "username_input".to_string(),
+///     Rect::new(100.0, 100.0, 200.0, 30.0),
+///     LayoutMetrics::default(),
+///     "Enter username...".to_string(),
+///     32,              // max input length
+///     16.0,            // font size
+///     Color::WHITE,    // text color
+///     Color::GRAY_20,  // background color
+/// );
+/// ```
 #[derive(Debug)]
 pub struct TextInput {
     id: String,
@@ -30,7 +66,18 @@ pub struct TextInput {
 }
 
 impl TextInput {
-    /// Creates a new TextInput component.
+    /// Creates a new text input component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the input
+    /// * `bounds` - Input field's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `placeholder` - Placeholder text shown when empty
+    /// * `max_input` - Maximum number of characters allowed
+    /// * `font_size` - Font size in pixels
+    /// * `color` - Text color
+    /// * `bg_color` - Background color (also used as focus color)
     pub fn new(
         id: String,
         bounds: Rect,
@@ -59,14 +106,20 @@ impl TextInput {
         }
     }
 
+    /// Gets the text to display (placeholder if empty, otherwise actual text).
     fn text_to_draw(&self) -> &str {
-        // Only show placeholder if text is empty AND placeholder is not empty
         if self.text.is_empty() && !self.placeholder.is_empty() {
             self.placeholder.as_str()
         } else {
             self.text.as_str()
         }
     }
+
+    /// Gets the current text content.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the input's text content (excluding placeholder).
     pub fn text(&self) -> &str {
         &self.text
     }
@@ -255,7 +308,8 @@ impl Component for TextInput {
             let scale = context.font_manager.calculate_scale(self.font_size);
 
             // This creates an immutable reference to the FontArc inside FontManager.
-            let scaled_font = context.font_manager.get_primary_font().as_scaled(scale);
+            let font_arc = context.font_manager.get_primary_font();
+            let scaled_font = font_arc.as_scaled(scale);
 
             // Extract the required f64 values immediately.
             let ascent = scaled_font.ascent() as f64;

@@ -52,7 +52,6 @@ This project develops a real-time, networked multiplayer first-person shooter (F
 *   **Dynamic Maze Generation:** Implement dynamic maze creation based on difficulty and the number of players.
 
 **Game Creation:** Host creates a game on the server with settings and stars it.
-**AI Opponents:** Develop AI-controlled players for gameplay when human players are unavailable.
 **Performance Targets:** Maintain stable 50 FPS.
 
 
@@ -81,13 +80,6 @@ Game ends when a player achieves a predefined score
 - **Dynamic Leaderboard**:
 Displays real-time player scores and rankings
 
-### Player Roles & Abilities
-- **Player Role Selection**:
-Players choose between Sphere and Cube roles
-- **Sphere Ability (Shrink & Speed)**:
-Allows players to shrink and move rapidly for evasion and hiding
-- **Cube Ability (Mimic Wall)**:
-Allows players to blend in by mimicking maze walls
 
 ### Networking & Connectivity
 - **Multiplayer Support**:
@@ -110,9 +102,9 @@ Allows players to send and receive text messages in the lobby
 Prompts clients to enter the server's IP address and port
 - **Username Input**:
 Prompts clients to provide a username for identification
-- **Server Connection History**:
+- **Server Connection History (Not implemented)**:
 Saves previously connected server details with user-defined aliases
-- **Simplified Reconnection**:
+- **Simplified Reconnection (Not implemented)**:
 Allows quick reconnection to saved servers
 
 ### Game Content & Environment
@@ -149,283 +141,212 @@ Computer-controlled players can participate in games
     *   **Audio**
         *   `audio/playback: rodio`
     *   **Application Logic & Abstraction (Custom Crates)**
-        *   `shared_logic: core` (Defines shared game entities, rules, physics, and authoritative game state.)
-        *   `network_abstraction: net` (Manages UDP packet handling, client connection tracking, and message serialization/deserialization.)
-        *   `rendering_engine: render` (Handles 3D rendering pipeline, translating game state into visual output.)
-        *   `user_interface_components: ui` (Manages all graphical user interface elements and processes user input.)
-        *   `game_content_management: levels` (Provides functionality for defining, loading, and generating maze layouts.)
-        *   `audio_manager: audio` (Abstracts audio playback for sound effects and music.)
+        *   `fps_ui`: UI framework built on winit and pixels, providing components, layout system, and event handling
+        *   `fps_net`: UDP networking library with reliable/unreliable messaging, ping management, and client/server sockets
+        *   `fps_levels`: Maze generation and management, including procedural generation and configuration
+        *   `fps_config`: Configuration management for user settings and preferences
+        *   `fps_audio`: Audio playback abstraction (Not implemented)
 
 - High-level setup
     *   **Single Executable, Dual Mode:** The application compiles into a single binary. Upon launch, the user is presented with a UI to choose between "Host Game" (starts a local server and connects as a client), "Join Game" (connects as a client to an existing server), or "Level Editor".
-    *   **Shared Game Logic (`core` crate):**
-        *   The `core` crate is fundamental, containing all game rules, physics, entity definitions, scoring logic, and the authoritative game state.
-        *   It is used by both the server (for authoritative state updates) and the client (for local prediction, interpolation, and rendering).
+    *   **Game Logic (in `src/app/`):**
+        *   Game state management, physics, scoring, and player actions are handled in the main application code
+        *   Server acts as authoritative source for game state
+        *   Client performs local prediction and rendering
         
-    *   **Client-Side Setup:**
-        *   Manages user input (`ui` crate), renders the game world (`render` crate), displays UI elements (mini-map, scores, FPS, chat via `ui` crate), and handles audio (`audio` crate).
-        *   Communicates with the server via the `net` crate, sending player inputs and receiving game state updates.
-        *   Performs client-side prediction and interpolation using the `core` crate to provide a smooth experience despite network latency.
-
-    *   **Server-Side Setup (when hosting):**
-        *   Operates as the authoritative source for the game state.
-        *   Employs a two-threaded design for performance and responsiveness:
-            *   **UDP Thread:** Continuously receives incoming UDP packets (client inputs) via `std::net::UdpSocket` and `net` crate, deserializes them (`bincode`), and queues them for processing. Sends outgoing UDP packets (game state updates) to all connected clients via `std::net::UdpSocket` and `net` crate, serializing data (`bincode`).
-            *   **Gameplay Loop Thread:** The main game logic thread. It dequeues client inputs, updates the authoritative game state using the `core` crate (handling physics, scoring, AI, player abilities, grace periods), and prepares game state updates for clients. It also manages game progression (winning conditions, level changes).
-        *   Manages client connections, disconnections, and authentication (username).
-        *   Integrates AI opponents using the `core` crate's game logic.
-
-    *   **User Interface (`ui` crate):**
-        *   Handles all GUI elements, including main menu, server connection prompts, lobby chat, in-game HUD (mini-map, scores, FPS), and the level editor.
-        *   Processes user input (keyboard, mouse) for both game control and UI interaction.
-
-    *   **Level Editor (`levels` & `ui` crates):**
-        *   A dedicated mode within the application allowing users to design custom mazes.
-        *   Leverages the `ui` crate for editor controls and the `levels` crate for maze data representation and saving/loading.
-
-    *   Server-Side (30 FPS Game Logic):
-        *   The server's "Gameplay Loop Thread" will be configured to run at a fixed tick rate of 30 Hz (e.g., every 33.3 ms).
-        *   Within each server tick, the core crate will be used to:
-            *   Process all client inputs received since the last tick.
-            *   Update the authoritative game state (physics, scoring, AI, player abilities, grace periods).
-            *   Generate a new authoritative game state snapshot.
-        *   The net crate on the server will send these game state snapshots to all connected clients at the 30 Hz server tick rate.
-        *   This reduces the computational load on the server, allowing it to handle more concurrent players or run on less powerful hardware.
+    *   **Client-Side Architecture:**
+        *   Main thread handles UI rendering and user input via `fps_ui` crate
+        *   Separate networking thread (`game_client_net.rs`) handles UDP communication
+        *   Game rendering uses raycasting engine (`GameRender` component) for 3D visualization
+        *   UI components display mini-map, scores, FPS counter, and chat
         
-    *   Client-Side (60 FPS Rendering & Prediction):
-        *   The client's main loop will run as fast as possible, aiming for 60 FPS (or higher, capped by winit and pixels).
-        *   Input Handling: The client will process user input (via ui crate) at its full frame rate (60 Hz). These inputs will be immediately used for client-side prediction (using the core crate) to provide instant feedback to the player.
-        *   Input Sending: The net crate on the client will send player inputs to the server. Instead of debouncing to 1/30 sec, it's generally better to send inputs more frequently (e.g., every frame at 60 Hz) or batch them and send them at a rate slightly higher than the server tick rate (e.g., 45-60 Hz). This ensures inputs arrive promptly without introducing artificial lag.
-        *   State Updates: The client's net crate will receive game state snapshots from the server at 30 Hz.
-        *   Prediction & Interpolation: The client's core crate will use these server snapshots, combined with client-side prediction and interpolation techniques, to smoothly render the game world at 60 FPS (via render crate) and update the UI (via ui crate). This involves predicting future states based on local input and inte
+    *   **Server-Side Architecture:**
+        *   Single-loop design for:
+            *   **Networking:** Receives client inputs via UDP, sends game state snapshots
+            *   **Game logic:** Updates authoritative game state at 60 Hz tick rate
+        *   Manages client connections, disconnections, and game progression
+        *   Handles scoring, invincibility periods, and winning conditions
+
+    *   **User Interface (`fps_ui` crate):**
+        *   Component-based UI system with layers and layout management
+        *   Views for main menu, join/host game, lobby, and in-game HUD
+        *   Components include buttons, labels, text inputs, mini-map, game renderer, and more
+        *   Processes keyboard and mouse input for both UI and game control
+
+    *   **Level/Maze System (`fps_levels` crate):**
+        *   Procedural maze generation using DFS algorithm
+        *   Configurable maze sizes and difficulties
+        *   Maze editor component for custom level creation
+        *   Support for saving and loading custom mazes
+
+    *   **Server Tick Rate:**
+        *   Server game loop runs at 60 Hz (16.67 ms per tick)
+        *   Processes client inputs and updates game state
+        *   Broadcasts game snapshots to all connected clients
+        
+    *   **Client Rendering:**
+        *   Client renders at display refresh rate (targeting 60+ FPS)
+        *   Uses raycasting for 3D first-person view
+        *   Displays mini-map, leaderboard, FPS counter, and crosshair
+        *   Handles player and bullet rendering with depth sorting
 
 ## Project Structure
 ```
-multiplayer_fps/
+multiplayer-fps/
 ├── src/
-│   ├── application/
-│   └── modes/
-│       ├── host_game/
-│       ├── join_game/
-│       └── level_editor/
-├── components/
-│   ├── fps_core/
-│   ├── fps_net/
+│   ├── main.rs                    # Application entry point
+│   ├── app/                       # Core application logic
+│   │   ├── mod.rs                 # Module exports
+│   │   ├── app.rs                 # Main App struct and event loop
+│   │   ├── client.rs              # Client state management
+│   │   ├── constants.rs           # Game constants (physics, scoring, etc.)
+│   │   ├── game.rs                # Game logic and state updates
+│   │   ├── game_client.rs         # Client-side game handling
+│   │   ├── game_client_net.rs     # Client networking thread
+│   │   ├── game_server.rs         # Server-side game handling
+│   │   ├── game_structs.rs        # Game state structures
+│   │   ├── game_input.rs          # Input state management
+│   │   ├── pos.rs                 # Position and rotation utilities
+│   │   └── view_ids.rs            # View and component ID constants
+│   ├── view/                      # UI Views (screens)
+│   │   ├── mod.rs                 # View module exports
+│   │   ├── view.rs                # View trait definition
+│   │   ├── view_main_menu.rs      # Main menu screen
+│   │   ├── view_join_menu.rs      # Join game screen
+│   │   ├── view_host_menu.rs      # Host game screen
+│   │   ├── view_level_menu.rs     # Level selection screen
+│   │   ├── view_lobby.rs          # Lobby screen
+│   │   └── view_game.rs           # In-game screen
+│   └── assets/                    # Game assets
+│       ├── fonts/                 # Font files
+│       ├── image/                 # Texture images
+│       └── config.json            # Configuration file
+├── crates/                        # Shared library crates
+│   ├── fps_ui/                    # UI framework crate
 │   │   ├── src/
-│   │   │   ├── protocol.rs
-│   │   │   │   •   pub enum MessageType {
-│   │   │   │           Ping=0,
-│   │   │   │           Pong=1,
-│   │   │   │           ConnectRequest=2,
-│   │   │   │           ConnectAccept=3,
-│   │   │   │           ConnectDeny=4,
-│   │   │   │           DisconnectNotice=5,
-│   │   │   │           Reliable=6,
-│   │   │   │           Unreliable=7,
-│   │   │   │           Acknowledgement=8,
-│   │   │   │       }
-│   │   │   │   •   pub struct MessageHeader {
-│   │   │   │           pub msg_type: MessageType,
-│   │   │   │           pub sequence: u32,
-│   │   │   │           pub timestamp_ms: u64,
-│   │   │   │       }
-│   │   │   │
-│   │   │   ├── message.rs
-│   │   │   │   •   pub fn encode_payload<T: Serialize>(payload: &T) -> Result<Vec<u8>, Box<dyn Error>>
-│   │   │   │   •   pub struct Message {
-│   │   │   │           pub header: MessageHeader,
-│   │   │   │           pub payload: Option<Vec<u8>>,
-│   │   │   │       }
-│   │   │   │   •   impl Message {
-│   │   │   │           pub fn new(msg_type: MessageType, sequence: u32, payload: Option<Vec<u8>>) -> Self
-│   │   │   │           pub fn encode(&self) -> Result<Vec<u8>, Box<dyn Error>>
-│   │   │   │           pub fn decode(bytes: &[u8]) -> Result<Self, Box<dyn Error>>
-│   │   │   │           pub fn decode_payload<T: for<'de> Deserialize<'de>>(&self) -> Result<T, Box<dyn Error>>
-│   │   │   │           pub fn new_ping(sequence: u32) -> Self
-│   │   │   │           pub fn new_pong(sequence: u32) -> Self
-│   │   │   │           pub fn new_connect_request(sequence: u32, username: &str) -> Self
-│   │   │   │           pub fn new_connect_accept(sequence: u32) -> Self
-│   │   │   │           pub fn new_connect_deny(sequence: u32, reason: &str) -> Self
-│   │   │   │           pub fn new_disconnect_notice(sequence: u32) -> Self
-│   │   │   │           pub fn new_reliable<T: Serialize>(sequence: u32, payload_obj: &T) -> Self
-│   │   │   │           pub fn new_unreliable<T: Serialize>(sequence: u32, payload_obj: &T) -> Self
-│   │   │   │           pub fn new_ack(sequence: u32, acked_sequence: u32) -> Self
-│   │   │   │           pub fn is_ping(&self) -> bool
-│   │   │   │           pub fn is_pong(&self) -> bool
-│   │   │   │           pub fn is_reliable(&self) -> bool
-│   │   │   │           pub fn is_unreliable(&self) -> bool
-│   │   │   │           pub fn is_ack(&self) -> bool
-│   │   │   │           pub fn is_connect_request(&self) -> bool
-│   │   │   │           pub fn is_connect_accept(&self) -> bool
-│   │   │   │           pub fn is_connect_deny(&self) -> bool
-│   │   │   │           pub fn is_disconnect_notice(&self) -> bool
-│   │   │   │       }
-│   │   │   │
-│   │   │   ├── ping.rs
-│   │   │   │   •   struct PingEntry {
-│   │   │   │           timestamp: Instant,
-│   │   │   │           addr: SocketAddr,
-│   │   │   │       }
-│   │   │   │   •   pub struct PingManager {
-│   │   │   │           next_sequence: u32,
-│   │   │   │           pending_pings: HashMap<u32, PingEntry>,
-│   │   │   │           timeout: Duration,
-│   │   │   │       }
-│   │   │   │   •   impl MePingManagerssage {
-│   │   │   │           pub fn new(timeout: Duration) -> Self
-│   │   │   │           pub fn create_ping(&mut self) -> u32
-│   │   │   │           pub fn handle_pong(&mut self, sequence: u32) -> Option<Duration>
-│   │   │   │           pub fn check_timeouts(&mut self) -> Vec<SocketAddr> 
-│   │   │   │       }
-│   │   │   │
-│   │   │   ├── net_socket.rs
-│   │   │   │   •   struct ReliableEntry {
-│   │   │   │           msg: Message,
-│   │   │   │           addr: SocketAddr,
-│   │   │   │           last_sent: Instant,
-│   │   │   │           attempts: u32,
-│   │   │   │       }
-│   │   │   │   •   pub struct NetSocket {
-│   │   │   │           recv_socket: UdpSocket,
-│   │   │   │           send_socket: UdpSocket,
-│   │   │   │           sequence: u32,
-│   │   │   │           recv_buffer: Vec<u8>,
-│   │   │   │           pub timeout: Duration,
-│   │   │   │           reliable_queue: HashMap<u32, ReliableEntry>,
-│   │   │   │       }
-│   │   │   │   •   impl NetSocket {
-│   │   │   │           pub fn bind(addr: &str, timeout: Duration) -> -> Result<Self, Box<dyn Error>>
-│   │   │   │           pub fn recv(&mut self) -> Result<(Message, SocketAddr), Box<dyn Error>>
-│   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
-│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
-│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
-│   │   │   │           pub fn set_timeout(&self, timeout: Duration) -> Result<(), Box<dyn Error>>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
-│   │   │   │       }
-│   │   │   │
-│   │   │   ├── client_socket.rs
-│   │   │   │   •   pub struct ClientSocket {
-│   │   │   │           socket: NetSocket,
-│   │   │   │           server_addr: SocketAddr,
-│   │   │   │           ping_manager: PingManager,
-│   │   │   │       }
-│   │   │   │   •   impl ClientSocket {
-│   │   │   │           pub fn new(local_addr: &str, server_addr: &str, ping_timeout: Duration) -> Result<Self, Box<dyn Error>>
-│   │   │   │           pub fn recv(&mut self) -> Result<Option<Message>, Box<dyn Error>>
-│   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, msg: &Message) -> Result<usize, Box<dyn Error>> 
-│   │   │   │           pub fn send_reliable(&mut self, msg: &Message) -> Result<usize, Box<dyn Error>>
-│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
-│   │   │   │           pub fn send_ping(&mut self) -> Result<u32, Box<dyn Error>>
-│   │   │   │           pub fn handle_pong(&mut self, seq: u32) -> Option<Duration>
-│   │   │   │           pub fn handle_ping(&self, seq: u32) -> Result<Message, Box<dyn Error>>
-│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
-│   │   │   │       }
-│   │   │   │
-│   │   │   ├── server_socket.rs
-│   │   │   │   •   pub struct ClientInfo {
-│   │   │   │           pub last_seen: u64,
-│   │   │   │       }
-│   │   │   │   •   pub struct ServerSocket {
-│   │   │   │           socket: NetSocket,
-│   │   │   │           clients: HashMap<SocketAddr, ClientInfo>,
-│   │   │   │           ping_manager: PingManager,
-│   │   │   │           timeout: Duration,
-│   │   │   │       }
-│   │   │   │   •   impl ServerSocket {
-│   │   │   │           pub fn bind(local_addr: &str, timeout: Duration) -> Result<Self, Box<dyn Error>>
-│   │   │   │           pub fn recv(&mut self) -> Result<Option<(Message, SocketAddr)>, Box<dyn Error>>
-│   │   │   │           pub fn next_sequence(&mut self) -> u32
-│   │   │   │           pub fn send(&mut self, addr: SocketAddr, msg: &Message) ->  Result<usize, Box<dyn Error>>
-│   │   │   │           pub fn send_reliable(&mut self, addr: SocketAddr, msg: &Message) -> Result<usize, Box<dyn Error>>
-│   │   │   │           pub fn resend_pending(&mut self) -> Vec<(u32, SocketAddr)>
-│   │   │   │           pub fn broadcast(&mut self, msg: &Message) -> Result<Vec<SocketAddr>, Box<dyn Error>>
-│   │   │   │           pub fn send_ping(&mut self, addr: SocketAddr) -> Result<u32, Box<dyn Error>>
-│   │   │   │           pub fn handle_pong(&mut self, addr: SocketAddr, seq: u32) -> Option<Duration>
-│   │   │   │           pub fn handle_ping(&self, addr: SocketAddr, seq: u32) -> Result<(SocketAddr, Message), Box<dyn Error>>
-│   │   │   │           pub fn check_ping_timeouts(&mut self) -> Vec<SocketAddr>
-│   │   │   │           pub fn client_list(&self) -> Vec<SocketAddr>
-│   │   │   │           pub fn remove_stale_clients(&mut self) -> Vec<SocketAddr>
-│   │   │   │           pub fn local_addr(&self) -> Result<SocketAddr, Box<dyn Error>>
-│   │   │   │       }
-│   │   │   │
+│   │   │   ├── lib.rs             # UI crate exports
+│   │   │   ├── components/        # UI components
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── component.rs   # Component trait
+│   │   │   │   ├── button.rs      # Button component
+│   │   │   │   ├── label.rs       # Label component
+│   │   │   │   ├── text_input.rs  # Text input component
+│   │   │   │   ├── text_box.rs    # Multi-line text box
+│   │   │   │   ├── panel.rs       # Panel/background component
+│   │   │   │   ├── fps_counter.rs # FPS display component
+│   │   │   │   ├── game_render.rs # 3D game renderer (raycasting)
+│   │   │   │   ├── mini_map.rs    # Mini-map component
+│   │   │   │   ├── maze_viewer.rs # Maze display component
+│   │   │   │   └── maze_editor.rs # Maze editor component
+│   │   │   ├── context.rs         # UI context and resources
+│   │   │   ├── driver.rs          # Window and rendering driver
+│   │   │   ├── events.rs          # UI events and updates
+│   │   │   ├── fonts.rs           # Font management
+│   │   │   ├── geometry.rs        # Geometric primitives
+│   │   │   ├── layout.rs          # Layout system
+│   │   │   └── manager.rs         # UI manager and layers
+│   │   └── README.md              # UI crate documentation
+│   ├── fps_net/                   # Networking crate
+│   │   ├── src/
 │   │   │   ├── lib.rs
-│   │   │   ├── error.rs
-│   │   │   └── util.rs
-│   │   │       •   pub fn now_ms() -> u64
-│   │   │
-│   │   └── Cargo.toml
-│   ├── fps_render/
-│   ├── fps_ui/
+│   │   │   ├── protocol.rs        # Message protocol definitions
+│   │   │   ├── message.rs         # Message serialization
+│   │   │   ├── net_socket.rs      # Base UDP socket wrapper
+│   │   │   ├── client_socket.rs   # Client-side socket
+│   │   │   ├── server_socket.rs   # Server-side socket
+│   │   │   ├── ping.rs            # Ping/pong management
+│   │   │   └── util.rs            # Network utilities
+│   │   └── README.md              # Network crate documentation
+│   ├── fps_levels/                # Level/maze generation crate
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── config.rs          # Maze configuration
+│   │   │   ├── generator.rs        # Maze generation algorithms
+│   │   │   └── maze.rs            # Maze data structures
+│   │   └── README.md              # Levels crate documentation
+│   ├── fps_config/                 # Configuration crate
 │   │   └── src/
-│   │       ├── lib.rs
-│   │       ├── fonts.rs  
-│   │       ├── context.rs 
-│   │       ├── window.rs
-│   │       ├── input.rs
-│   │       ├── layers.rs
-│   │       ├── events.rs
-│   │       ├── renderer.rs
-│   │       ├── components/
-│   │       │   ├── mod.rs
-│   │       │   ├── component.rs
-│   │       │   ├── button.rs
-│   │       │   ├── label.rs
-│   │       │   ├── text_field.rs
-│   │       │   └── dynamic_pixel.rs
-│   │       └── utils/
-│   │           ├── mod.rs
-│   │           └── geometry.rs
-│   │
-│   ├── fps_levels/
-│   └── fps_audio/
-├── assets/
-│   ├── textures/
-│   ├── sounds/
-│   ├── fonts/
-│   └── maps/
-├── config/
-├── .gitignore
-└── README.md
+│   │       └── lib.rs
+│   └── fps_audio/                  # Audio crate (placeholder)
+│       └── src/
+│           └── main.rs
+├── Cargo.toml                     # Workspace and main crate config
+└── README.md                       # This file
 ```
 
-### To-do List
-- [O]create game view
-- [O]setup input capture for movement
-- client game input
-    - [O]movement input (WASD and Shift)
-    - [O]mouse input for Direction
-    - [O]mouse input for shoot
-    - [O]ESC to exit
+## Implementation Status
 
-- setup server side game logic
-    - [O]setup size of world and players
-    - [O]setup positioning and direction
-    - [O]setup player action
-    - setup bullet struct
-    - setup player status
-    - setup shooting and hit detection
-    - setup scoring and grace period
-    - setup winning condition
-    - [O]setup player exit and disconnect
-    
-- [O]send snapshot
-- [O]read snapshot
-- [O]send client input to server
-- [O]process client input to update game state
+### ✅ Completed Features
 
-- [O]setup game view
-- [O]setup client side drawing
-- [O]display world on client side
-    - [O]raycasting engine. no verticality?
-    - [O]render maze walls
-    - [ ]render players: position, direction, status, action
-    - [ ]render bullets
+#### Core Gameplay
+- ✅ Game view and rendering system
+- ✅ Player movement (WASD + Shift for running)
+- ✅ Mouse look (camera rotation)
+- ✅ Shooting mechanics
+- ✅ Bullet system and rendering
+- ✅ Player rendering with 3D sprites
+- ✅ Hit detection and scoring system
+- ✅ Invincibility grace period (2 seconds)
+- ✅ Winning condition based on target score
+- ✅ Dynamic leaderboard display
 
-- [O]setup leaderboard display
+#### Networking
+- ✅ UDP client-server architecture
+- ✅ Reliable and unreliable message delivery
+- ✅ Ping/pong system for connection health
+- ✅ Client input transmission
+- ✅ Game state snapshot broadcasting
+- ✅ Client connection/disconnection handling
 
-#### maybe
-- save and list previously connected servers
+#### User Interface
+- ✅ Main menu view
+- ✅ Host game view
+- ✅ Join game view
+- ✅ Level selection view
+- ✅ Lobby view with chat
+- ✅ In-game HUD with:
+    - ✅ 3D raycasted game view
+    - ✅ Mini-map with player position
+    - ✅ Leaderboard
+    - ✅ FPS counter with background
+    - ✅ Crosshair
+    - ✅ Score display
+
+#### Game World
+- ✅ Procedural maze generation
+- ✅ Multiple maze sizes and difficulties
+- ✅ Maze rendering (walls, floor, ceiling)
+- ✅ Collision detection
+- ✅ Player positioning and movement
+
+#### Code Quality
+- ✅ Centralized constants module
+- ✅ View and component ID constants
+- ✅ Comprehensive documentation for all crates
+- ✅ Refactored game logic into helper functions
+- ✅ Component-based UI architecture
+
+### 🚧 In Progress / Planned
+
+#### Game Features
+- [ ] Player roles (Spheres and Cubes with unique abilities)
+- [ ] AI opponents
+- [ ] Multiple pre-designed levels
+- [ ] Server connection history with aliases
+
+#### UI Enhancements
+- [ ] Enhanced level editor features
+- [ ] Settings menu
+- [ ] Pause menu
+
+#### Audio
+- [ ] Sound effects
+- [ ] Background music
+- [ ] Audio manager integration
+
+### 📝 Notes
+- Server runs at 60 Hz tick rate
+- Client renders at display refresh rate
+- Uses DDA (Digital Differential Analyzer) raycasting for 3D rendering
+- All game constants are centralized in `src/app/constants.rs`
 

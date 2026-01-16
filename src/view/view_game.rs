@@ -1,3 +1,8 @@
+//! # Game View
+//!
+//! The in-game view displayed during active gameplay. Contains the 3D game renderer,
+//! minimap, leaderboard, and score display.
+
 use super::super::{LOGICAL_HEIGHT, LOGICAL_WIDTH};
 use super::{View, ViewAction};
 use fps_config::Config;
@@ -10,14 +15,22 @@ use fps_ui::{
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
+use crate::app::view_ids::views;
 
+/// Game view implementation.
 pub struct ViewGame {
+    /// Bounds of the game render area.
     pub bounds: Rect,
+    
+    /// Current maze for the game.
     pub maze: Maze,
+    
+    /// Whether the left mouse button is currently pressed.
     pub is_left_mouse_btn_pressed: bool,
 }
 
 impl ViewGame {
+    /// Creates a new game view.
     pub fn new() -> Self {
         Self {
             maze: Maze::default(),
@@ -29,7 +42,7 @@ impl ViewGame {
 
 impl View for ViewGame {
     fn id(&self) -> &str {
-        "game"
+        views::GAME
     }
 
     fn layer(&self) -> Layer {

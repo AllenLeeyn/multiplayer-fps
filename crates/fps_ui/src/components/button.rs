@@ -1,3 +1,8 @@
+//! # Button Component
+//!
+//! An interactive button component that responds to mouse clicks and hover states.
+//! Displays text centered both horizontally and vertically.
+
 use super::super::{
     Color, Component, ComponentUpdate, ElementState, IntRect, LayoutMetrics, MouseButton, Rect,
     UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_box
@@ -5,7 +10,27 @@ use super::super::{
 use ab_glyph::{Font, ScaleFont};
 use std::any::Any;
 
-/// A standard interactive button component.
+/// An interactive button component.
+///
+/// Buttons respond to mouse clicks and hover states, emitting `ButtonClicked` events
+/// when clicked. The button's background color changes on hover to provide visual feedback.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::Button;
+/// use fps_ui::{Color, Rect, layout::LayoutMetrics};
+///
+/// let button = Button::new(
+///     "start_button",
+///     "Start Game",
+///     Rect::new(100.0, 100.0, 200.0, 50.0),
+///     LayoutMetrics::default(),
+///     Color::WHITE,  // text color
+///     Color::BLUE,   // background color
+///     Color::CYAN,   // hover color
+/// );
+/// ```
 #[derive(Debug)]
 pub struct Button {
     id: String,
@@ -27,6 +52,21 @@ pub struct Button {
 }
 
 impl Button {
+    /// Creates a new button component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the button
+    /// * `text` - Text to display on the button
+    /// * `bounds` - Button's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `text_color` - Color of the button text
+    /// * `background_color` - Normal background color
+    /// * `hover_color` - Background color when hovered
+    ///
+    /// # Returns
+    ///
+    /// A new `Button` instance with default font size of 24 pixels.
     pub fn new(
         id: &str,
         text: &str,
@@ -52,7 +92,9 @@ impl Button {
         }
     }
 
-    /// Helper to get the current drawing color based on interaction state.
+    /// Gets the current background color based on interaction state.
+    ///
+    /// Returns `hover_color` if the button is hovered, otherwise `background_color`.
     fn current_bg_color(&self) -> Color {
         if self.is_hovered {
             self.hover_color
@@ -165,7 +207,8 @@ impl Component for Button {
 
         let (scaled_ascent, scaled_descent) = {
             let scale = context.font_manager.calculate_scale(self.font_size);
-            let scaled_font = context.font_manager.get_primary_font().as_scaled(scale);
+            let font_arc = context.font_manager.get_primary_font();
+            let scaled_font = font_arc.as_scaled(scale);
 
             let ascent = (scaled_font.ascent()) as f64;
             let descent = (scaled_font.descent()) as f64;

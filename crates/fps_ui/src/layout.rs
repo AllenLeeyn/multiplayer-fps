@@ -1,20 +1,46 @@
+//! # Layout Module
+//!
+//! Provides a flexible layout system for positioning and sizing UI components.
+//! Supports both pixel-based and percentage-based positioning with multiple anchor points.
+
 use super::Rect;
 
+/// Specifies how length values are interpreted.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LengthMode {
-    Px,      // logical pixels
-    Percent, // 0.0 ..= 1.0
+    /// Values are interpreted as logical pixels.
+    Px,
+    
+    /// Values are interpreted as percentages (0.0 to 1.0).
+    Percent,
 }
 
+/// Anchor point for component positioning.
+///
+/// Determines which corner or center point of the component is used as the
+/// reference for positioning relative to the anchor point.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AnchorPoint {
+    /// Anchor at the top-left corner.
     TopLeft,
+    
+    /// Anchor at the top-right corner.
     TopRight,
+    
+    /// Anchor at the bottom-left corner.
     BottomLeft,
+    
+    /// Anchor at the bottom-right corner.
     BottomRight,
+    
+    /// Anchor at the center point.
     Center,
 }
 
+/// Layout metrics defining how a component is positioned and sized.
+///
+/// Combines anchor point, positioning mode, and sizing mode to create
+/// flexible layout behavior.
 #[derive(Debug, Clone, Copy)]
 pub struct LayoutMetrics {
     pub anchor: AnchorPoint,
@@ -32,6 +58,10 @@ impl Default for LayoutMetrics {
     }
 }
 
+/// Layout context containing the logical canvas dimensions.
+///
+/// Used by the layout system to resolve percentage-based positions and sizes
+/// and to calculate anchor point positions.
 #[derive(Debug, Clone, Copy)]
 pub struct LayoutContext {
     pub logical_width: f64,
@@ -46,6 +76,19 @@ impl LayoutContext {
         }
     }
 
+    /// Resolves a relative rectangle to absolute coordinates.
+    ///
+    /// Applies anchor point, positioning mode, and sizing mode to convert
+    /// a component's local rectangle to screen coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `rect` - The relative rectangle (in component-local coordinates)
+    /// * `metrics` - The layout metrics defining positioning and sizing
+    ///
+    /// # Returns
+    ///
+    /// An absolute rectangle in logical screen coordinates.
     pub fn resolve_rect(&self, rect: &Rect, metrics: &LayoutMetrics) -> Rect {
         let (abs_w, abs_h) = match metrics.sizing {
             LengthMode::Px => (rect.w, rect.h),
@@ -95,8 +138,23 @@ impl LayoutContext {
     }
 }
 
-/// Calculates the absolute position and size of a UI component in logical coordinates.
-/// This rect is still in **logical space**, not yet scaled to physical pixels.
+/// Calculates the absolute position and size of a UI component.
+///
+/// Converts a component's relative rectangle (defined in its local coordinate space)
+/// to absolute logical coordinates based on layout metrics and context.
+///
+/// The returned rectangle is in logical space and will be scaled to physical
+/// pixels by the `AppDriver` during rendering.
+///
+/// # Arguments
+///
+/// * `metrics` - Layout metrics defining anchor, positioning, and sizing
+/// * `relative_rect` - Component's local rectangle
+/// * `layout` - Layout context with canvas dimensions
+///
+/// # Returns
+///
+/// An absolute rectangle in logical coordinates.
 pub fn calculate_absolute_rect(
     metrics: &LayoutMetrics,
     relative_rect: &Rect,

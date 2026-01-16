@@ -1,3 +1,8 @@
+//! # Text Box Component
+//!
+//! A multi-line scrollable text display component. Supports appending text,
+//! scrolling with mouse wheel, and automatic scrolling to bottom on new content.
+
 use std::any::Any;
 
 use super::super::{
@@ -5,6 +10,35 @@ use super::super::{
     WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 
+/// A multi-line scrollable text box component.
+///
+/// Displays multiple lines of text with vertical scrolling support. Automatically
+/// scrolls to the bottom when new content is appended. Supports mouse wheel scrolling
+/// when hovered.
+///
+/// # Features
+///
+/// - Multi-line text display
+/// - Vertical scrolling with mouse wheel
+/// - Automatic scroll-to-bottom on new content
+/// - Line-based text management
+/// - Configurable font size and colors
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::TextBox;
+/// use fps_ui::{Color, Rect, layout::LayoutMetrics};
+///
+/// let text_box = TextBox::new(
+///     "chat_log".to_string(),
+///     Rect::new(10.0, 10.0, 300.0, 200.0),
+///     LayoutMetrics::default(),
+///     14.0,            // font size
+///     Color::WHITE,    // text color
+///     Color::GRAY_10,  // background color
+/// );
+/// ```
 #[derive(Debug)]
 pub struct TextBox {
     id: String,
@@ -31,6 +65,16 @@ pub struct TextBox {
 }
 
 impl TextBox {
+    /// Creates a new text box component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the text box
+    /// * `bounds` - Text box's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `font_size` - Font size in pixels
+    /// * `text_color` - Text color
+    /// * `background_color` - Background color
     pub fn new(
         id: String,
         bounds: Rect,
@@ -55,6 +99,15 @@ impl TextBox {
         }
     }
 
+    /// Calculates the maximum scroll offset for the given visible height.
+    ///
+    /// # Arguments
+    ///
+    /// * `visible_height` - Height of the visible area
+    ///
+    /// # Returns
+    ///
+    /// Maximum scroll offset (0.0 if content fits in visible area).
     fn max_scroll(&self, visible_height: f32) -> f32 {
         let content_height = self.lines.len() as f32 * self.line_height;
         (content_height - visible_height).max(0.0)

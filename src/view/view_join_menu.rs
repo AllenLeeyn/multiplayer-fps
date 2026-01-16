@@ -1,3 +1,8 @@
+//! # Join Menu View
+//!
+//! View for joining an existing game server. Allows users to enter a server
+//! address and connect to a game.
+
 use fps_ui::{
     Color, ComponentUpdate, UIEvent,
     components::{Button, Label, TextInput},
@@ -8,12 +13,16 @@ use fps_ui::{
 
 use super::{View, ViewAction};
 use fps_config::Config;
+use crate::app::view_ids::views;
 
+/// Join menu view implementation.
 pub struct ViewJoinMenu {
+    /// Server address input value.
     server_addr: String,
 }
 
 impl ViewJoinMenu {
+    /// Creates a new join menu view.
     pub fn new() -> Self {
         Self {
             server_addr: String::new(),
@@ -23,7 +32,7 @@ impl ViewJoinMenu {
 
 impl View for ViewJoinMenu {
     fn id(&self) -> &str {
-        "join_menu"
+        views::JOIN_MENU
     }
 
     fn layer(&self) -> Layer {
@@ -112,7 +121,7 @@ impl View for ViewJoinMenu {
         );
 
         Layer {
-            id: "join_menu".into(),
+            id: views::JOIN_MENU.into(),
             z_index: 10,
             is_visible: false, // start hidden, shown via SwitchTo
             is_modal: false,
@@ -134,7 +143,7 @@ impl View for ViewJoinMenu {
                     vec![ViewAction::JoinGame(self.server_addr.to_string())]
                 }
                 "back_join_button" => {
-                    vec![ViewAction::SwitchTo("main_menu".to_string())]
+                    vec![ViewAction::SwitchTo(views::MAIN_MENU.to_string())]
                 }
 
                 _ => vec![],

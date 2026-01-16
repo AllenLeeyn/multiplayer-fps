@@ -1,121 +1,234 @@
-## 💻 `fps_ui` Crate Overview: A Caller-Driven Toolkit
+# `fps_ui` - Single-Threaded UI Toolkit
 
-The **`fps_ui`** crate is designed as a **single-threaded, high-performance UI toolkit** built on top of `winit` and `pixels`. It focuses on providing a stable rendering canvas and high-level $\text{UI}$ components, allowing the application (the caller) to remain in full control of the game state and event execution.
+A high-performance, single-threaded UI toolkit built on top of `winit` and `pixels`. Designed for game UIs with a caller-driven architecture where the application maintains full control over game state and event execution.
 
-### 1. Single-Threaded Architecture and Core Abstraction 🚀
+## Features
 
-The primary mission of this crate is to **extend the low-level functionalities** of three core libraries into a unified, high-level $\text{UI}$ system:
+- **Single-Threaded**: All UI logic runs on one thread for simplicity and performance
+- **Caller-Driven**: Application maintains full control over game state
+- **Layered Components**: Organize UI with Z-ordering and visibility control
+- **Flexible Layout**: Pixel-based and percentage-based positioning with anchor points
+- **Efficient Rendering**: Glyph caching, event-driven redraws, and optimized pixel operations
+- **Type-Safe**: Strong typing for events, updates, and component interactions
 
-* **`winit`** is extended for **event handling**, translating raw $\text{OS}$ events (like mouse clicks and window resizing) into structured **`UIEvent`** messages.
-* **`pixels`** is extended for **drawing**, providing abstract rendering functions (e.g., `draw_rect`, `draw_text`) atop the raw pixel buffer.
-* **`glam`** is extended for **geometry**, providing the foundation for reliable positioning, scaling, and hit-testing across all components.
+## Quick Start
 
-The $\text{UI}$ logic runs entirely on a single thread, driven by the $\text{winit}$ event loop (`run_event_loop`). This thread handles all window management, input polling, and rendering.
+```rust
+use fps_ui::{UIMainContext, UIManager, components::Button, Color, Rect, layout::LayoutMetrics};
 
-* **Caller-Driven Loop:** The `fps_ui` crate does **not** manage application logic. Instead, the application calls the `UIManager` methods within the $\text{winit}$ loop.
-* **Event Consumption:** The `UIManager::process_input()` method translates raw $\text{winit}$ events into a list of high-level **`UIEvent`** messages (e.g., `ButtonClicked`, `TextSubmitted`). The application logic in `main.rs` must **consume and handle** these events accordingly (e.g., switching game modes, sending data over `fps_net`).
-* **Efficiency:** By running the $\text{UI}$ on a dedicated thread and relying on the $\text{OS}$ to fire events, the crate minimizes $\text{CPU}$ consumption during idle periods.
+// Create UI context
+let mut context = UIMainContext::new("fonts/main.ttf", 800.0, 600.0)?;
 
----
+// Load textures
+context.load_texture("button_bg", "assets/button.png")?;
 
-### 2. Window and Initialization 🖼️
+// Create UI manager
+let mut manager = UIManager::new(context);
 
-The crate provides the necessary functionality to establish the visual environment based on caller-supplied parameters.
+// Create a button component
+let button = Button::new(
+    "my_button".to_string(),
+    "Click Me".to_string(),
+    Rect::new(100.0, 100.0, 200.0, 50.0),
+    LayoutMetrics::default(),
+    Color::BLUE,
+);
 
-* **Window Creation:** The $\text{UI}$ exposes methods (via `ui_window.rs`) to create the application window using `winit` and initialize the GPU-backed pixel buffer using `pixels`.
-* **Parameter-Based Setup:** The application provides initial parameters (e.g., width, height, title) to the $\text{UI}$ initialization routines, guaranteeing a consistent starting canvas size.
+// Add to a layer
+let layer = Layer {
+    id: "main".to_string(),
+    z_index: 0,
+    is_visible: true,
+    is_modal: false,
+    components: vec![Box::new(button)],
+};
 
----
-
-### 3. Layered Component System (Layout and Grouping) 🧱
-
-The layout system is built around layers and reusable components, enabling complex $\text{UI}$ structures.
-
-* **Layers for Organization:** The application can define **multiple layers** (`UILayer`) within the `UIManager`. Layers serve two primary purposes:
-    1.  **Z-Ordering:** Layers are drawn based on their **`z_index`**, guaranteeing the correct render order (e.g., drawing the main menu overlay on top of the $\text{HUD}$).
-    2.  **Pooling and Visibility:** Layers are used for logical grouping, allowing the application to toggle the visibility of entire $\text{UI}$ sets (e.g., hiding the "Main Menu" layer and showing the "In Game $\text{HUD}$" layer).
-* **Multiple Components:** Each defined layer can contain **multiple components** ($\text{Button}$, $\text{Label}$, $\text{TextField}$, etc.).
-
----
-
-### 4. Component Drawing and Redraw Logic 🎨
-
-The `fps_ui` crate handles the low-level rendering, but the redraw timing is managed intelligently.
-
-* **Standard Elements:** The crate provides implementations for standard $\text{UI}$ elements, abstracting away the tedious pixel manipulation (using `ui_renderer.rs` primitives). The user defines the component's position, size, and data, and the component handles its own drawing logic (e.g., a $\text{Button}$ knows how to draw its background, border, and center its text).
-* **Event-Driven Redrawing:** Redrawing is **not** constant. The system only requests a new frame when a visual change occurs, such as:
-    * A **`WindowEvent::Resized`** event.
-    * An **internal $\text{UI}$ state change** (e.g., the mouse moving over a $\text{Button}$ triggers the component to change its `is_hovered` state).
-    * The application explicitly requests a redraw after updating dynamic data (e.g., a score change).
-
----
-
-### 5. Positioning and Geometry 📐
-
-The $\text{UI}$ supports flexible positioning that adapts to different screen sizes.
-
-* **Absolute Position:** Components are primarily positioned using **absolute pixel coordinates** $(x, y)$ from a defined anchor point (e.g., top-left).
-* **Relative Positioning:** Positioning logic uses the **whole window size** (read from `WindowContext`) to calculate final coordinates. This allows components to be positioned relative to the screen size (e.g., "always center," or "place $\text{10}$ pixels from the bottom-right corner"), enabling the $\text{UI}$ to scale correctly when the window is resized.
-
------
-
-## 📁 `fps_ui` Crate File Structure
-
-```
-fps_ui/
-├── src/
-│   ├── lib.rs
-│   ├── driver.rs       <-- NEW: Handles Window/Pixels state only.
-│   ├── events.rs       <-- Communication types (Input/Output).
-│   ├── context.rs      <-- Global Resources (UIMainContext).
-│   ├── fonts.rs        <-- Font Management.
-│   ├── layers.rs       <-- Orchestration (UIManager/UILayer).
-│   └── components/     <-- Component Definitions.
-│       ├── mod.rs      <-- Component Trait.
-│       └── button.rs   <-- Example Component.
-└── Cargo.toml
-
-
-│   ├── fps_ui/
-│   │   └── src/
-│   │       ├── lib.rs                  # Crate entry point and public API exports.
-│   │       ├── fonts.rs                # Font loading and management (ab-glyph).
-│   │       ├── context.rs              # UIMainContext: Global, application-wide resources.
-│   │       ├── window.rs               # WindowContext, winit/pixels initialization, and the main event loop driver.
-│   │       ├── input.rs                # Winit event translation and component internal state updates.
-│   │       ├── layers.rs               # UIManager and UILayer: State management, ordering, and orchestration.
-│   │       ├── events.rs               # UIEvent: Definition of the actionable messages for the caller.
-│   │       ├── renderer.rs             # Low-level drawing primitives (rects, text) using the pixels buffer.
-│   │       ├── components/
-│   │       │   ├── mod.rs              # Component trait and common visual state definitions.
-│   │       │   ├── component.rs        # (Typically merged into mod.rs or traits defined here)
-│   │       │   ├── button.rs           # Button component implementation.
-│   │       │   ├── label.rs            # Label component implementation.
-│   │       │   ├── text_field.rs       # Text input component implementation.
-│   │       │   └── dynamic_pixel.rs    # Custom component for dynamic, caller-supplied pixel data (e.g., mini-map).
-│   │       └── geometry.rs             # 2D geometry, hit-testing, and positioning utilities (using glam).
+manager.add_layer(layer)?;
 ```
 
------
+## Architecture
 
-## 🔍 Module Responsibilities Overview
+### Design Philosophy
 
-### A. Context and Initialization (The Foundation)
+The crate extends low-level functionalities into a unified, high-level UI system:
 
-  * **`lib.rs`**: **Public API.** Declares all modules and re-exports the main structs (`UIManager`, `WindowContext`, `UIEvent`) for easy consumption by the application.
-  * **`window.rs`**: **Loop Driver.** Contains **`WindowContext`** (holds `winit` and `pixels`) and the **`run_event_loop()`** function, which drives the single-threaded execution and handles $\text{OS}$-level window events.
-  * **`context.rs`**: **Global State.** Defines **`UIMainContext`**, a container for resources like the `FontManager` and global settings, passed through the render cycle.
-  * **`fonts.rs`**: **Asset Manager.** Handles the loading and management of font assets, providing rasterized glyph data to the renderer.
+- **`winit`** → Event handling: Translates raw OS events into structured `UIEvent` messages
+- **`pixels`** → Drawing: Provides abstract rendering functions atop raw pixel buffers
+- **`glam`** → Geometry: Foundation for positioning, scaling, and hit-testing
 
-### B. Logic and State Management (The Engine)
+### Single-Threaded Execution
 
-  * **`layers.rs`**: **Orchestrator.** Defines **`UIManager`** and **`UILayer`**. Manages component collection, $\text{Z-ordering}$, visibility pooling, and exposes the primary methods: **`process_input()`** and **`render()`**.
-  * **`input.rs`**: **Input Translator.** Consumes raw `winit` input events. It performs hit-testing on components and updates their **internal visual state** (`is_hovered`, `is_focused`).
-  * **`events.rs`**: **Message Definition.** Defines the **`UIEvent`** enum, representing the actionable messages (`ButtonClicked`, `TextSubmitted`) returned to the application caller.
+All UI logic runs on a single thread, driven by the winit event loop. The application calls `UIManager` methods within the winit loop, maintaining full control.
 
-### C. Rendering and Components (The Visuals)
+### Caller-Driven Loop
 
-  * **`renderer.rs`**: **Drawing Interface.** Provides the low-level, high-performance functions (`draw_rect`, `draw_text`) that abstract the raw pixel manipulation of the `pixels` frame buffer.
-  * **`components/mod.rs` & `component.rs`**: **Contract.** Define the core **`Component`** trait and required methods (`draw`, `bounds`, `handle_input`), which all specific components must implement.
-  * **`components/...`**: **Implementations.** Contains the specific data and drawing logic for each standard $\text{UI}$ element.
-  * **`utils/geometry.rs`**: **Math.** Provides necessary geometry structs (`Rect`) and functions (`contains_point`) for accurate layout and input detection.
+The crate does not manage application logic. Instead:
+
+1. `UIManager::process_input()` translates raw winit events into `UIEvent` messages
+2. The application consumes and handles these events (e.g., switching game modes)
+3. The application updates components via `UIManager::apply_updates()`
+
+### Coordinate Systems
+
+The UI uses two coordinate systems:
+
+- **Logical Coordinates**: UI components are positioned in logical space (e.g., 800x600)
+- **Physical Coordinates**: The `AppDriver` scales logical to physical pixels for rendering
+
+This allows the UI to scale appropriately when the window is resized.
+
+## Core Concepts
+
+### Layers
+
+Layers organize components with Z-ordering and visibility control:
+
+```rust
+let layer = Layer {
+    id: "menu".to_string(),
+    z_index: 10,
+    is_visible: true,
+    is_modal: false,
+    components: vec![/* ... */],
+};
+```
+
+### Components
+
+All UI elements implement the `Component` trait:
+
+- **Identification**: Unique ID for updates and events
+- **Layout**: Position, size, and layout metrics
+- **Input Handling**: Process window events and emit UI events
+- **Rendering**: Draw to the frame buffer
+- **State Updates**: Apply `ComponentUpdate` messages
+
+### Events
+
+Events flow from components to the application:
+
+```rust
+pub enum UIEvent {
+    ButtonClicked(String),
+    TextSubmitted(String, String),
+    // ...
+}
+```
+
+### Updates
+
+Updates flow from the application to components:
+
+```rust
+pub enum ComponentUpdate {
+    SetText(String, String),
+    SetVisibility(String, bool),
+    // ...
+}
+```
+
+## Layout System
+
+### Anchor Points
+
+Components can be anchored to different points:
+
+- `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`, `Center`
+
+### Length Modes
+
+- `Px`: Values are in logical pixels
+- `Percent`: Values are percentages (0.0 to 1.0)
+
+### Example
+
+```rust
+let metrics = LayoutMetrics {
+    anchor: AnchorPoint::Center,
+    positioning: LengthMode::Percent,
+    sizing: LengthMode::Px,
+};
+
+// Component will be centered horizontally, positioned 50% down,
+// with fixed pixel width/height
+```
+
+## Text Rendering
+
+The font system uses glyph caching for efficient text rendering:
+
+```rust
+// Text is automatically cached by character/size/color
+font_manager.draw_text(
+    frame,
+    "Hello, World!",
+    16.0,           // size
+    Color::WHITE,
+    x, y,
+    width, height,
+);
+```
+
+## Components
+
+Available components:
+
+- **Button**: Clickable buttons with text
+- **Label**: Static text display
+- **TextInput**: Editable text fields
+- **TextBox**: Multi-line text display
+- **Panel**: Solid color or texture backgrounds
+- **FpsComponent**: FPS counter display
+- **GameRender**: 3D game world rendering
+- **MiniMap**: Top-down minimap view
+- **MazeView**: Maze visualization
+- **MazeEditor**: Interactive maze editor
+
+## Usage Pattern
+
+```rust
+// In your event loop:
+loop {
+    event_loop.run_app(&mut app)?;
+}
+
+// In ApplicationHandler::window_event:
+let ui_events = app.manager.process_input(&event, driver.logical_cursor());
+
+for ui_event in ui_events {
+    match ui_event {
+        UIEvent::ButtonClicked(id) => {
+            // Handle button click
+        }
+        // ...
+    }
+}
+
+// Update components
+app.manager.apply_updates(updates);
+
+// Render
+driver.render(&mut app.manager)?;
+```
+
+## Performance Considerations
+
+- **Glyph Caching**: Characters are rasterized once and cached
+- **Event-Driven Redraws**: Only redraw when visual state changes
+- **Efficient Pixel Operations**: Direct frame buffer manipulation
+- **Single-Threaded**: No synchronization overhead
+
+## Modules
+
+- **`components`**: UI component implementations
+- **`context`**: Global UI context (fonts, textures, layout)
+- **`driver`**: Window and rendering driver
+- **`events`**: UI event types and component updates
+- **`fonts`**: Font loading and text rendering
+- **`geometry`**: Geometric primitives (Rect, IntRect)
+- **`layout`**: Layout system with anchors and metrics
+- **`manager`**: UI manager and layer orchestration
+
+## License
+
+Part of the multiplayer-fps project.

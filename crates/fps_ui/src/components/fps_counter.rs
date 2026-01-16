@@ -1,3 +1,8 @@
+//! # FPS Counter Component
+//!
+//! A specialized component that automatically calculates and displays the current
+//! frames per second (FPS). Updates once per second and tracks frame count internally.
+
 use std::any::Any;
 use std::time::{Duration, Instant};
 
@@ -6,7 +11,28 @@ use super::super::{
     calculate_absolute_rect,
 };
 
-/// A specialized component that displays the current Frames Per Second (FPS).
+/// A component that displays the current frames per second (FPS).
+///
+/// Automatically calculates FPS by counting frames over one-second intervals.
+/// The `update()` method should be called each frame for accurate measurements.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::FpsComponent;
+/// use fps_ui::{Color, Rect, layout::LayoutMetrics};
+///
+/// let fps_counter = FpsComponent::new(
+///     "fps_counter".to_string(),
+///     16.0,           // font size
+///     Color::GREEN,   // text color
+///     Rect::new(10.0, 10.0, 100.0, 20.0),
+///     LayoutMetrics::default(),
+/// );
+///
+/// // In your update loop:
+/// fps_counter.update();
+/// ```
 #[derive(Debug, Clone)]
 pub struct FpsComponent {
     pub id: String,
@@ -24,6 +50,15 @@ pub struct FpsComponent {
 }
 
 impl FpsComponent {
+    /// Creates a new FPS counter component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the component
+    /// * `font_size` - Font size in pixels
+    /// * `color` - Text color
+    /// * `relative_bounds` - Component's bounding rectangle (relative coordinates)
+    /// * `metrics` - Layout metrics for positioning
     pub fn new(
         id: String,
         font_size: f32,
@@ -48,6 +83,15 @@ impl FpsComponent {
         }
     }
 
+    /// Updates the FPS value and returns whether a redraw is needed.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_fps` - The new FPS value to display
+    ///
+    /// # Returns
+    ///
+    /// `true` if the FPS changed and a redraw is needed, `false` otherwise.
     pub fn update_fps(&mut self, new_fps: u32) -> bool {
         if self.current_fps != new_fps {
             self.current_fps = new_fps;
@@ -81,8 +125,8 @@ impl Component for FpsComponent {
         Vec::new()
     }
 
-    /// Handles incoming updates from the application layer.
     fn apply_update(&mut self, _update: &ComponentUpdate) -> bool {
+        // FPS component doesn't accept external updates
         false
     }
 
@@ -111,6 +155,10 @@ impl Component for FpsComponent {
         &self.text
     }
 
+    /// Updates the FPS calculation.
+    ///
+    /// Should be called once per frame. Calculates FPS over one-second intervals
+    /// and updates the display text when a new measurement is available.
     fn update(&mut self) {
         let now = Instant::now();
 

@@ -1,3 +1,7 @@
+//! # UI Manager Module
+//!
+//! Manages the UI component hierarchy, input routing, and rendering coordination.
+
 use std::collections::HashMap;
 
 use super::{
@@ -6,6 +10,9 @@ use super::{
 };
 
 /// A container for UI components that shares a common Z-order and visibility state.
+///
+/// Layers allow organizing components into logical groups that can be shown/hidden
+/// together and control rendering order via Z-index.
 #[derive(Debug)]
 pub struct Layer {
     pub id: String,
@@ -16,7 +23,19 @@ pub struct Layer {
 }
 
 /// The main entry point for the UI system.
-/// Manages the hierarchy of layers and components, routes input, and tracks state.
+///
+/// Manages the hierarchy of layers and components, routes input events, tracks focus/hover
+/// state, and coordinates rendering. All UI operations go through the UIManager.
+///
+/// ## Usage Pattern
+///
+/// 1. Create a `UIManager` with a `UIMainContext`
+/// 2. Add layers containing components
+/// 3. In the event loop:
+///    - Call `process_input()` to handle window events
+///    - Call `apply_updates()` to update component state
+///    - Call `update_components()` for per-frame updates
+///    - Call `draw()` to render all visible components
 #[derive(Debug)]
 pub struct UIManager {
     context: UIMainContext,

@@ -1,10 +1,34 @@
+//! # Label Component
+//!
+//! A simple text label component for displaying static or dynamically updated text.
+//! Labels do not respond to user input and are purely presentational.
+
 use super::super::{
     Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent,
     calculate_absolute_rect,
 };
 use std::any::Any;
 
-/// Defines the style and content of a text label.
+/// A text label component for displaying static or dynamic text.
+///
+/// Labels are read-only text displays that can be updated programmatically
+/// via `ComponentUpdate::SetText`. They do not handle user input.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::Label;
+/// use fps_ui::{Color, Rect, layout::LayoutMetrics};
+///
+/// let label = Label::new(
+///     "score_label".to_string(),
+///     "Score: 0".to_string(),
+///     16.0,           // font size
+///     Color::WHITE,   // text color
+///     Rect::new(10.0, 10.0, 200.0, 30.0),
+///     LayoutMetrics::default(),
+/// );
+/// ```
 #[derive(Debug, Clone)]
 pub struct Label {
     id: String,
@@ -17,6 +41,16 @@ pub struct Label {
 }
 
 impl Label {
+    /// Creates a new label component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the label
+    /// * `text` - Initial text content
+    /// * `font_size` - Font size in pixels
+    /// * `color` - Text color
+    /// * `bounds` - Label's bounding rectangle (relative coordinates)
+    /// * `metrics` - Layout metrics for positioning
     pub fn new(
         id: String,
         text: String,

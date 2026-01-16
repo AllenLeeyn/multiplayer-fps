@@ -1,9 +1,22 @@
+//! # Application Module
+//!
+//! Main application struct that coordinates the UI, views, game logic, and networking.
+//! Implements `ApplicationHandler` for winit event loop integration.
+//!
+//! The `App` manages:
+//! - UI rendering and component updates
+//! - View lifecycle and transitions
+//! - Game server (when hosting)
+//! - Game client (when joining)
+//! - Input handling and game state
+//! - Configuration management
+
 use crate::app::GameState;
 use crate::view::{View, ViewAction};
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread;
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use fps_levels::config::MazeSize;
 use winit::application::ApplicationHandler;
@@ -12,12 +25,18 @@ use winit::window::WindowId;
 use winit::event::DeviceEvent;
 
 use super::{GameServer, ServerHandle, game_client::Game, GameInputState};
+use super::view_ids::{views, components};
+use super::constants::{server, client};
 use fps_config::Config;
 use fps_levels::maze::Maze;
 use fps_ui::{Rect, AppDriver, ComponentUpdate, WindowEvent, components::MazeEditor, manager::UIManager};
 
 use crate::{LOGICAL_HEIGHT, LOGICAL_WIDTH, PHYSICAL_HEIGHT, PHYSICAL_WIDTH};
 
+/// Main application struct managing the entire application lifecycle.
+///
+/// Coordinates between UI rendering, views, game logic, and networking.
+/// Implements winit's `ApplicationHandler` trait for event loop integration.
 pub struct App {
     pub driver: Option<AppDriver<'static>>,
     pub manager: UIManager,
@@ -34,6 +53,14 @@ pub struct App {
 }
 
 impl App {
+    /// Registers a view with the application.
+    ///
+    /// Adds the view's layer to the UI manager and stores the view
+    /// for later activation.
+    ///
+    /// # Arguments
+    ///
+    /// * `view` - The view to register (boxed dynamic view)
     pub fn register_view(&mut self, view: Box<dyn View>) {
         let view_id = view.id().to_string();
 
@@ -46,6 +73,14 @@ impl App {
         self.views.insert(view_id, view);
     }
 
+    /// Activates a view by ID.
+    ///
+    /// Hides the current view, shows the new view, manages cursor lock
+    /// for game views, and calls the view's `on_activate` callback.
+    ///
+    /// # Arguments
+    ///
+    /// * `view_id` - The ID of the view to activate
     pub fn activate_view(&mut self, view_id: &str) {
         // Hide current
         if let Some(current) = &self.active_view {
@@ -59,12 +94,12 @@ impl App {
         if let Some(driver) = self.driver.as_ref() {
             let window = driver.window();
 
-            if view_id == "game" {
+            if view_id == views::GAME {
                 lock_cursor(window);
                 self.manager
-                    .set_hovered_component(Some("game_render".to_string()));
+                    .set_hovered_component(Some(components::GAME_RENDER.to_string()));
                 self.manager
-                    .set_focused_component(Some("game_render".to_string()));
+                    .set_focused_component(Some(components::GAME_RENDER.to_string()));
             } else {
                 unlock_cursor(window);
             }
@@ -118,14 +153,14 @@ impl App {
 
             ViewAction::LeaveLobby => {
                 self.kill_game();
-                self.activate_view("main_menu");
+                self.activate_view(views::MAIN_MENU);
             }
 
             ViewAction::SendChatMessage(chat_msg) => {
                 if let Some(game) = &mut self.game {
                     let _ = game.send_chat_msg(&chat_msg, &self.config.username);
                     self.manager.apply_updates(vec![ComponentUpdate::SetText(
-                        "lobby_chat_input".into(),
+                        components::LOBBY_CHAT_INPUT.into(),
                         String::new(),
                     )]);
                 }
@@ -136,14 +171,14 @@ impl App {
             }
 
             ViewAction::StartGame => {
-                self.activate_view("game");
+                self.activate_view(views::GAME);
             }
 
             ViewAction::GameEnd(winner) => {
                 self.game_input.clear();
-                self.activate_view("lobby");
+                self.activate_view(views::LOBBY);
                 self.manager.apply_updates(vec![ComponentUpdate::AppendTextVec(
-                    "lobby_chat_log".into(),
+                    components::LOBBY_CHAT_LOG.into(),
                     vec![format!("[{} WINS]", winner)]
                 )]);
             }
@@ -173,7 +208,7 @@ impl App {
 
         // Update the label
         self.manager.apply_updates(vec![ComponentUpdate::SetText(
-            "username_label".into(),
+            components::USERNAME_LABEL.into(),
             format!("Current user: {}", username),
         )]);
 
@@ -194,7 +229,7 @@ impl App {
 
             // Update the label
             self.manager.apply_updates(vec![ComponentUpdate::SetText(
-                "save_maze_button".into(),
+                components::SAVE_MAZE_BUTTON.into(),
                 "SAVED".into(),
             )]);
 
@@ -219,8 +254,9 @@ impl App {
         let score = target_score
             .parse::<u32>()
             .map_err(|_| "Target score must be a number".to_string())?;
-        if !(30..=9999).contains(&score) {
-            return Err("Target score must be between 30 and 9999".to_string());
+        use super::constants::scoring;
+        if !(scoring::MIN_TARGET_SCORE..=scoring::MAX_TARGET_SCORE).contains(&score) {
+            return Err(format!("Target score must be between {} and {}", scoring::MIN_TARGET_SCORE, scoring::MAX_TARGET_SCORE));
         }
 
         // Validate maze connectivity
@@ -235,6 +271,18 @@ impl App {
         Ok(())
     }
 
+    /// Connects to a game server.
+    ///
+    /// Creates a new game client and connects to the specified server.
+    /// Sets up the lobby UI after successful connection.
+    ///
+    /// # Arguments
+    ///
+    /// * `server_addr` - Address of the server to connect to
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if connection succeeds, error message otherwise.
     pub fn connect_server(&mut self, server_addr: SocketAddr) -> Result<(), String> {
         if self.game.is_some() {
             return Err("Already connected to a game".into());
@@ -245,7 +293,7 @@ impl App {
         let game = Game::connect(
             server_addr,
             "0.0.0.0:0", // ephemeral client port
-            Duration::from_secs(5),
+            client::CONNECTION_TIMEOUT,
             username,
         )
         .map_err(|e| format!("Failed to connect to server: {}", e))?;
@@ -257,6 +305,32 @@ impl App {
 
         self.game = Some(game);
         Ok(())
+    }
+
+    fn start_game_server(
+        &mut self,
+        game_name: String,
+        maze: Maze,
+        target_score: String,
+    ) -> Result<String, String> {
+        match start_server(
+            server::DEFAULT_BIND_ADDR,
+            game_name,
+            maze,
+            target_score,
+            self.config.username.to_string(),
+        ) {
+            Ok((handle, public_addr)) => {
+                println!("Server started successfully {:?}", public_addr);
+                self.server = Some(handle);
+                self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                    components::LOBBY_ADDR_LABEL.into(),
+                    public_addr.clone().into(),
+                )]);
+                Ok(public_addr)
+            }
+            Err(e) => Err(format!("Failed to start server: {}", e)),
+        }
     }
 
     fn host_game(&mut self, game_name: String, maze: Maze, target_score: String) {
@@ -272,41 +346,51 @@ impl App {
             game_name, target_score, maze.name
         );
 
-        // Start server
-        let mut server_addr = String::new();
+        // Start server if not already running
         if self.server.is_none() {
-            match start_server(
-                "0.0.0.0:9000",
-                game_name,
-                new_maze,
-                target_score,
-                self.config.username.to_string(),
-            ) {
-                Ok((handle, public_addr)) => {
-                    println!("Server started successfully {:?}", public_addr);
-                    self.server = Some(handle);
-                    server_addr = public_addr.clone();
-                    self.manager.apply_updates(vec![ComponentUpdate::SetText(
-                        "lobby_addr_label".into(),
-                        public_addr.into(),
-                    )]);
+            match self.start_game_server(game_name, new_maze, target_score) {
+                Ok(server_addr) => {
+                    self.set_host_error("");
+                    self.join_game(server_addr);
                 }
                 Err(e) => {
-                    self.set_host_error(format!("Failed to start server: {}", e));
-                    return;
+                    self.set_host_error(e);
                 }
             }
+        } else {
+            // Server already running, get its address and join
+            // Note: This case shouldn't normally happen, but handle it gracefully
+            self.set_host_error("Server already running");
         }
-
-        self.set_host_error("");
-        self.join_game(server_addr.to_string());
     }
 
     fn set_host_error(&mut self, msg: impl Into<String>) {
         self.manager.apply_updates(vec![ComponentUpdate::SetText(
-            "host_error_label".into(),
+            components::HOST_ERROR_LABEL.into(),
             msg.into(),
         )]);
+    }
+
+    fn setup_lobby_ui(&mut self, maze: &Maze, target_score: u32, is_host: bool) {
+        let mini_map_layout = get_mini_map_layout(maze.config.size);
+
+        self.manager.apply_updates(vec![
+            ComponentUpdate::SetText(
+                components::LOBBY_MAZE_SETTINGS.into(),
+                format!(
+                    "{:?} {:?} Maze | Max Players: {} | Win Score: {}",
+                    maze.config.size,
+                    maze.config.difficulty,
+                    maze.config.max_players(),
+                    target_score,
+                ),
+            ),
+            ComponentUpdate::SetVisibility(components::START_GAME_BUTTON.into(), is_host),
+            ComponentUpdate::SetMaze(components::LOBBY_MAZE_VIEW.to_string(), maze.clone()),
+            ComponentUpdate::SetMiniMapLayout(components::GAME_MINI_MAP.to_string(), mini_map_layout),
+            ComponentUpdate::SetMaze(components::GAME_MINI_MAP.to_string(), maze.clone()),
+            ComponentUpdate::SetMaze(components::GAME_RENDER.to_string(), maze.clone()),
+        ]);
     }
 
     fn join_game(&mut self, server_addr: String) {
@@ -331,43 +415,29 @@ impl App {
 
         self.set_host_error("");
         self.set_join_error("");
-        self.activate_view("lobby");
+        self.activate_view(views::LOBBY);
 
         if let Some(game) = self.game.as_ref() {
-            let mini_map_layout = get_mini_map_layout(game.maze.config.size);
+            let game_state = game.state;
+            let maze = game.maze.clone();
+            let target_score = game.target_score;
+            let is_host = game.is_host;
+            
+            self.setup_lobby_ui(&maze, target_score, is_host);
 
-            self.manager.apply_updates(vec![
-                ComponentUpdate::SetText(
-                    "lobby_maze_settings".into(),
-                    format!(
-                        "{:?} {:?} Maze | Max Players: {} | Win Score: {}",
-                        game.maze.config.size,
-                        game.maze.config.difficulty,
-                        game.maze.config.max_players(),
-                        game.target_score,
-                    ),
-                ),
-                ComponentUpdate::SetVisibility("start_game_button".into(), game.is_host),
-                ComponentUpdate::SetMaze("lobby_maze_view".to_string(), game.maze.clone()),
-                ComponentUpdate::SetMiniMapLayout("game_mini_map".to_string(), mini_map_layout),
-                ComponentUpdate::SetMaze("game_mini_map".to_string(), game.maze.clone()),
-                ComponentUpdate::SetMaze("game_render".to_string(), game.maze.clone()),
-                
-            ]);
-
-            if game.state == GameState::InGame {
-                self.activate_view("game");
+            if game_state == GameState::InGame {
+                self.activate_view(views::GAME);
             }
-
         } else {
-            self.set_host_error(format!("Game not found"));
-            self.set_join_error(format!("Game not found"));
+            let error_msg = "Game not found".to_string();
+            self.set_host_error(error_msg.clone());
+            self.set_join_error(error_msg);
         }
     }
 
     fn set_join_error(&mut self, msg: impl Into<String>) {
         self.manager.apply_updates(vec![ComponentUpdate::SetText(
-            "join_error_label".into(),
+            components::JOIN_ERROR_LABEL.into(),
             msg.into(),
         )]);
     }
@@ -472,7 +542,8 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let Some(game) = self.game.as_mut() && game.state == GameState::InGame {
+                if let Some(game) = self.game.as_mut() 
+                    && game.state == GameState::InGame {
                     let payload = self.game_input.snapshot(); // This clears the dx
                     let _ = game.send_game_input(payload);
                 }
@@ -488,7 +559,7 @@ impl ApplicationHandler for App {
                     let window = driver.window();
 
                     if focused {
-                        if self.active_view.as_deref() == Some("game") {
+                        if self.active_view.as_deref() == Some(views::GAME) {
                             lock_cursor(window);
                         }
                     } else {
@@ -547,11 +618,28 @@ pub fn lock_cursor(window: &Window) -> bool {
     grabbed
 }
 
+/// Unlocks the cursor from the window.
+///
+/// # Arguments
+///
+/// * `window` - The window to unlock the cursor from
 pub fn unlock_cursor(window: &Window) {
     let _ = window.set_cursor_grab(CursorGrabMode::None);
     window.set_cursor_visible(true);
 }
 
+/// Calculates layout metrics for the minimap component.
+///
+/// Returns the rectangle, scale factor, and offset for positioning
+/// the minimap based on maze size.
+///
+/// # Arguments
+///
+/// * `size` - The size of the maze
+///
+/// # Returns
+///
+/// A tuple of `(rectangle, scale, offset)`.
 pub fn get_mini_map_layout(size: MazeSize) -> (Rect, f32, f32) {
     let cell_px = 150/size.grid_size();
     let player_px = cell_px/2;

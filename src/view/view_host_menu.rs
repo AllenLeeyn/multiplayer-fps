@@ -1,3 +1,8 @@
+//! # Host Menu View
+//!
+//! View for hosting a new game. Allows users to configure game settings including
+//! game name, target score, maze size, difficulty, and select custom mazes.
+
 use super::{View, ViewAction};
 use fps_config::Config;
 use fps_levels::{
@@ -12,17 +17,28 @@ use fps_ui::{
     layout::{AnchorPoint, LayoutMetrics, LengthMode},
     manager::Layer,
 };
+use crate::app::view_ids::views;
 
+/// Host menu view implementation.
 pub struct ViewHostMenu {
+    /// Currently displayed maze (generated or custom).
     maze: Maze,
+    
+    /// Custom maze from configuration (if available).
     custom_maze: Maze,
+    
+    /// Current maze configuration (size and difficulty).
     maze_config: MazeConfig,
 
+    /// Game name input value.
     game_name: String,
+    
+    /// Target score input value.
     target_score: String,
 }
 
 impl ViewHostMenu {
+    /// Creates a new host menu view with default settings.
     pub fn new() -> Self {
         let maze_config = MazeConfig {
             size: MazeSize::Medium,
@@ -41,6 +57,10 @@ impl ViewHostMenu {
         }
     }
 
+    /// Regenerates the maze based on current configuration.
+    ///
+    /// If difficulty is Custom, uses the custom maze. Otherwise generates
+    /// a new maze with the current configuration.
     fn regenerate_maze(&mut self) -> Vec<ViewAction> {
         if self.maze_config.difficulty == Difficulty::Custom {
             self.maze = self.custom_maze.clone();
@@ -66,7 +86,7 @@ impl ViewHostMenu {
 
 impl View for ViewHostMenu {
     fn id(&self) -> &str {
-        "host_menu"
+        views::HOST_MENU
     }
 
     fn layer(&self) -> Layer {
@@ -315,7 +335,7 @@ impl View for ViewHostMenu {
         );
 
         Layer {
-            id: "host_menu".into(),
+            id: views::HOST_MENU.into(),
             z_index: 10,
             is_visible: false,
             is_modal: false,
@@ -391,7 +411,7 @@ impl View for ViewHostMenu {
                 }
 
                 "back_host_button" => {
-                    vec![ViewAction::SwitchTo("main_menu".to_string())]
+                    vec![ViewAction::SwitchTo(views::MAIN_MENU.to_string())]
                 }
 
                 _ => vec![],
@@ -420,7 +440,7 @@ impl View for ViewHostMenu {
             self.custom_maze = maze.clone();
         }
 
-        // reste properties
+        // reset properties
         self.game_name.clear();
         self.target_score.clear();
 

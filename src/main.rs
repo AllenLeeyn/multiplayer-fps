@@ -18,7 +18,7 @@ use fps_ui::{
     manager::{Layer, UIManager},
 };
 
-use app::{App, GameInputState};
+use app::{App, GameInputState, view_ids::views};
 use view::{ViewHostMenu, ViewJoinMenu, ViewLevelMenu, ViewLobby, ViewMainMenu, ViewGame};
 
 pub const PHYSICAL_WIDTH: u32 = 1600;
@@ -62,8 +62,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let fps_component = FpsComponent::new(
         "fps_counter".to_string(),
         16.0,
-        Color::BLACK,
+        Color::YELLOW,
         Rect::new(2.0, 2.0, 50.0, 20.0),
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            positioning: LengthMode::Px,
+            sizing: LengthMode::Px,
+        },
+    );
+
+    // Red background box for FPS counter (slightly larger with padding)
+    // Positioned at (0, 0) to align with FPS component at (2, 2), with 2px padding
+    let fps_background = Panel::new_with_layout(
+        "fps_background".to_string(),
+        RenderSource::SolidColor(Color::BLACK),
+        Rect::new(0.0, 0.0, 74.0, 16.0),
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
             positioning: LengthMode::Px,
@@ -81,11 +94,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 
     let fps_layer = Layer {
-        id: "fos".to_string(),
+        id: "fps".to_string(),
         z_index: 1000,
         is_visible: true,
         is_modal: false,
-        components: vec![Box::new(fps_component)],
+        components: vec![
+            Box::new(fps_background),  // Background panel (renders first, behind)
+            Box::new(fps_component),   // FPS text (renders on top)
+        ],
     };
 
     ui_manager.add_layer(background_layer)?;
@@ -119,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.register_view(Box::new(host_level_view));
     app.register_view(Box::new(lobby_view));
     app.register_view(Box::new(game_view));
-    app.activate_view("main_menu");
+    app.activate_view(views::MAIN_MENU);
 
     event_loop.run_app(&mut app)?;
 

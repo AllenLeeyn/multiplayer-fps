@@ -1,3 +1,8 @@
+//! # Maze Viewer Component
+//!
+//! A read-only component for displaying maze layouts. Shows walls and empty cells
+//! in a grid format with visual distinction between cell types.
+
 use fps_levels::maze::{Cell, Maze};
 use std::any::Any;
 
@@ -6,6 +11,29 @@ use super::super::{
     calculate_absolute_rect, draw_filled_bordered_box,
 };
 
+/// A read-only maze visualization component.
+///
+/// Displays a maze in a grid format where walls and empty cells are visually
+/// distinct. The maze can be updated programmatically via `ComponentUpdate::SetMaze`.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::MazeView;
+/// use fps_levels::{maze::Maze, generator::generate_maze, config::MazeConfig};
+/// use fps_ui::{Rect, layout::LayoutMetrics};
+///
+/// let config = MazeConfig::new();
+/// let maze = generate_maze(&config, "Level 1".to_string());
+///
+/// let view = MazeView::new(
+///     "maze_display",
+///     maze,
+///     Rect::new(10.0, 10.0, 300.0, 300.0),
+///     LayoutMetrics::default(),
+///     10.0,  // cell size in pixels
+/// );
+/// ```
 #[derive(Debug)]
 pub struct MazeView {
     id: String,
@@ -19,6 +47,15 @@ pub struct MazeView {
 }
 
 impl MazeView {
+    /// Creates a new maze view component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the component
+    /// * `maze` - The maze to display
+    /// * `bounds` - Component's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `cell_px` - Size of each cell in pixels
     pub fn new(
         id: impl Into<String>,
         maze: Maze,

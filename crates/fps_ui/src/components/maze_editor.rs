@@ -1,3 +1,8 @@
+//! # Maze Editor Component
+//!
+//! An interactive component for editing maze layouts. Supports click-and-drag
+//! editing to toggle cells between wall and empty states.
+
 use fps_levels::{
     config::MazeSize,
     maze::{Cell, Maze},
@@ -9,6 +14,37 @@ use super::super::{
     UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_bordered_box
 };
 
+/// An interactive maze editor component.
+///
+/// Allows users to edit maze layouts by clicking and dragging to toggle cells
+/// between wall and empty states. The edited maze can be retrieved via `maze()`
+/// for saving.
+///
+/// # Features
+///
+/// - Click to toggle cells
+/// - Drag to paint multiple cells
+/// - Visual feedback with color-coded cells
+/// - Read-only access to edited maze
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::MazeEditor;
+/// use fps_levels::config::MazeSize;
+/// use fps_ui::{Rect, layout::LayoutMetrics};
+///
+/// let editor = MazeEditor::new(
+///     "maze_editor",
+///     MazeSize::Small,
+///     Rect::new(10.0, 10.0, 400.0, 400.0),
+///     LayoutMetrics::default(),
+///     10.0,  // cell size in pixels
+/// );
+///
+/// // Later, retrieve the edited maze:
+/// let maze = editor.maze();
+/// ```
 #[derive(Debug)]
 pub struct MazeEditor {
     id: String,
@@ -26,6 +62,15 @@ pub struct MazeEditor {
 }
 
 impl MazeEditor {
+    /// Creates a new maze editor component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the component
+    /// * `size` - Size of the maze to create
+    /// * `bounds` - Component's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    /// * `cell_px` - Size of each cell in pixels
     pub fn new(
         id: impl Into<String>,
         size: MazeSize,
@@ -48,11 +93,27 @@ impl MazeEditor {
         }
     }
 
-    /// Read-only access for saving into config
+    /// Gets read-only access to the edited maze.
+    ///
+    /// Use this to retrieve the maze for saving to configuration.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the current maze state.
     pub fn maze(&self) -> &Maze {
         &self.maze
     }
 
+    /// Converts cursor coordinates to maze cell coordinates.
+    ///
+    /// # Arguments
+    ///
+    /// * `cursor_x` - Cursor X coordinate (logical)
+    /// * `cursor_y` - Cursor Y coordinate (logical)
+    ///
+    /// # Returns
+    ///
+    /// Cell coordinates `(x, y)` if cursor is within bounds, `None` otherwise.
     fn cell_from_cursor(&self, cursor_x: f64, cursor_y: f64) -> Option<(usize, usize)> {
         let local_x = cursor_x - self.bounds.x;
         let local_y = cursor_y - self.bounds.y;
@@ -71,6 +132,14 @@ impl MazeEditor {
         }
     }
 
+    /// Toggles the cell at the cursor position.
+    ///
+    /// Prevents repeated toggling of the same cell during drag operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `cursor_x` - Cursor X coordinate (logical)
+    /// * `cursor_y` - Cursor Y coordinate (logical)
     fn paint_at_cursor(&mut self, cursor_x: f64, cursor_y: f64) {
         let cell = match self.cell_from_cursor(cursor_x, cursor_y) {
             Some(c) => c,
@@ -86,6 +155,12 @@ impl MazeEditor {
         self.last_cell = Some(cell);
     }
 
+    /// Toggles a cell between wall and empty states.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - Cell X coordinate
+    /// * `y` - Cell Y coordinate
     fn toggle_cell_at(&mut self, x: usize, y: usize) {
         let cell = self.maze.get(x, y);
         let new_cell = match cell {

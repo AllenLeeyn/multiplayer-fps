@@ -1,21 +1,31 @@
+//! # Panel Component
+//!
+//! A basic rectangular panel component used for backgrounds, containers, and full-screen overlays.
+//! Supports solid colors, textures, and custom rendering functions.
+
 use std::any::Any;
 use std::fmt::{Debug, Formatter, Result};
 
 use super::super::{
-    Color, Component, ComponentUpdate, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent, draw_point
+    Color, Component, ComponentUpdate, IntRect, LayoutMetrics, Rect, UIEvent, UIMainContext, WindowEvent, calculate_absolute_rect, draw_filled_box
 };
 
-/// Defines the source and type of rendering for the Panel component.
+/// Defines the rendering source for a panel.
+///
+/// Panels can render from solid colors, loaded textures, or custom functions.
 pub enum RenderSource {
-    /// Fills the area with a single solid color.
+    /// Fills the panel with a solid color.
     SolidColor(Color),
 
-    /// Renders an image loaded into memory. Holds a reference (ID) to the image data
-    /// which lives in the UIMainContext.
+    /// Renders a texture loaded in `UIMainContext`.
+    ///
+    /// The string is the texture ID used when loading the texture.
     Image(String),
 
-    /// Renders based on a custom function that generates pixel data dynamically.
-    /// Args: (x, y) normalized coordinates relative to the panel's bounds (0.0 to 1.0).
+    /// Renders using a custom function.
+    ///
+    /// The function receives normalized coordinates (0.0 to 1.0) relative to
+    /// the panel's bounds and returns a color for that position.
     Function(Box<dyn Fn(f64, f64) -> Color + Send + Sync>),
 }
 
@@ -30,22 +40,72 @@ impl Debug for RenderSource {
     }
 }
 
-// --- Panel Component Struct ---
-
-/// A basic rectangular component used primarily for backgrounds or containers.
+/// A rectangular panel component for backgrounds and containers.
+///
+/// Panels are simple rectangular components that can render solid colors,
+/// textures, or custom-generated content. They're typically used as backgrounds
+/// or container elements.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_ui::components::{Panel, RenderSource};
+/// use fps_ui::{Color, Rect};
+///
+/// // Solid color background
+/// let panel = Panel::new(
+///     "background".to_string(),
+///     RenderSource::SolidColor(Color::BLUE),
+///     Rect::new(0.0, 0.0, 800.0, 600.0),
+/// );
+///
+/// // Texture background
+/// let texture_panel = Panel::new(
+///     "bg_texture".to_string(),
+///     RenderSource::Image("background_texture".to_string()),
+///     Rect::new(0.0, 0.0, 800.0, 600.0),
+/// );
+/// ```
 #[derive(Debug)]
 pub struct Panel {
     id: String,
     bounds: Rect,
+    layout: LayoutMetrics,
     source: RenderSource,
     needs_redraw: bool,
 }
 
 impl Panel {
+    /// Creates a new panel component.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the panel
+    /// * `source` - Rendering source (color, texture, or function)
+    /// * `bounds` - Panel's bounding rectangle (relative coordinates)
     pub fn new(id: String, source: RenderSource, bounds: Rect) -> Self {
         Panel {
             id,
             bounds,
+            layout: LayoutMetrics::default(),
+            source,
+            needs_redraw: true,
+        }
+    }
+
+    /// Creates a new panel component with custom layout metrics.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the panel
+    /// * `source` - Rendering source (color, texture, or function)
+    /// * `bounds` - Panel's bounding rectangle (relative coordinates)
+    /// * `layout` - Layout metrics for positioning
+    pub fn new_with_layout(id: String, source: RenderSource, bounds: Rect, layout: LayoutMetrics) -> Self {
+        Panel {
+            id,
+            bounds,
+            layout,
             source,
             needs_redraw: true,
         }
@@ -64,7 +124,7 @@ impl Component for Panel {
     }
 
     fn layout_metrics(&self) -> LayoutMetrics {
-        LayoutMetrics::default()
+        self.layout
     }
 
     fn handle_input(
@@ -76,20 +136,25 @@ impl Component for Panel {
     }
 
     fn draw(&self, frame: &mut [u8], context: &mut UIMainContext) {
-        let draw_start_x = 0;
-        let draw_start_y = 0;
-        let (draw_width, draw_height) = context.layout.size_as_u32();
+        let bounds_f64 = calculate_absolute_rect(&self.layout_metrics(), &self.bounds, &context.layout);
+        let abs_rect: IntRect = bounds_f64.to_int_rect();
+        let (logical_width, logical_height) = context.layout.size_as_u32();
 
-        for y in draw_start_y..draw_height {
-            for x in draw_start_x..draw_width {
-                let color = match &self.source {
-                    RenderSource::SolidColor(c) => *c,
-                    _ => Color::RED,
-                };
+        let color = match &self.source {
+            RenderSource::SolidColor(c) => *c,
+            _ => Color::RED,
+        };
 
-                draw_point(frame, draw_width, draw_height, x, y, color);
-            }
-        }
+        draw_filled_box(
+            frame,
+            logical_width,
+            logical_height,
+            abs_rect.x as u32,
+            abs_rect.y as u32,
+            abs_rect.w as u32,
+            abs_rect.h as u32,
+            color,
+        );
     }
 
     fn apply_update(&mut self, update: &ComponentUpdate) -> bool {

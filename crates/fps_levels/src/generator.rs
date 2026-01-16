@@ -1,11 +1,39 @@
+//! # Maze Generator Module
+//!
+//! Implements procedural maze generation using a depth-first search (DFS) algorithm
+//! with configurable loop addition based on difficulty.
+
 use rand::prelude::SliceRandom;
 use rand::{Rng, rng};
 
 use crate::config::{Difficulty, MazeConfig};
 use crate::maze::{Cell, Maze};
 
-/// Generates a randomized maze.
-/// Each call produces a different maze.
+/// Generates a randomized maze using DFS corridor carving.
+///
+/// The generation process:
+/// 1. Seeds a starting cell at an even coordinate
+/// 2. Carves corridors using DFS (guaranteeing connectivity)
+/// 3. Adds loops based on difficulty settings
+/// 4. Extracts spawn points from room regions
+///
+/// # Arguments
+///
+/// * `config` - Configuration specifying size and difficulty
+/// * `name` - Name identifier for the generated maze
+///
+/// # Returns
+///
+/// A fully connected maze with spawn points set.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use fps_levels::{config::MazeConfig, generator::generate_maze};
+///
+/// let config = MazeConfig::new();
+/// let maze = generate_maze(&config, "Level 1".to_string());
+/// ```
 pub fn generate_maze(config: &MazeConfig, name: String) -> Maze {
     let size = config.grid_size();
     let mut maze = Maze::new(name, size, size);

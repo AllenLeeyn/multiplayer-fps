@@ -1,9 +1,21 @@
+//! # Game Client Module
+//!
+//! Manages client-side game state and networking integration. Handles connection
+//! to the server, game state synchronization, and UI updates based on server messages.
+//!
+//! The client maintains a local copy of the game state (players, bullets, maze)
+//! that is updated from server snapshots. It also handles sending player inputs
+//! to the server.
+
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use std::collections::{HashMap, HashSet};
 
-use crate::app::ClientStatus;
-use crate::app::game_structs::Bullet;
+use crate::app::{
+    view_ids::components,
+    ClientStatus,
+    game_structs::Bullet,
+};
 use crate::view::ViewAction;
 use fps_levels::maze::Maze;
 use fps_net::message::GameInputPayload;
@@ -16,6 +28,10 @@ use fps_ui::ComponentUpdate;
 use super::game_client_net::{GameNetEvent, GameNetHandle, start_game_net};
 use super::{Client, GameState, Pos};
 
+/// Represents the client's view of the game state.
+///
+/// Maintains local copies of players, bullets, and game configuration received
+/// from the server. Handles network communication via a separate networking thread.
 #[derive(Debug)]
 pub struct Game {
     pub _server_addr: SocketAddr,
@@ -35,12 +51,31 @@ pub struct Game {
 }
 
 impl Game {
+    /// Connects to a game server and initializes the game state.
+    ///
+    /// Performs the connection handshake:
+    /// 1. Creates a client socket
+    /// 2. Sends a join game request
+    /// 3. Waits for game info response
+    /// 4. Starts the networking thread
+    ///
+    /// # Arguments
+    ///
+    /// * `server_addr` - Address of the server to connect to
+    /// * `local_addr` - Local address to bind the socket to
+    /// * `timeout` - Connection timeout duration
+    /// * `username` - Username to use for joining
+    ///
+    /// # Returns
+    ///
+    /// A new `Game` instance if connection succeeds, error otherwise.
     pub fn connect(
         server_addr: SocketAddr,
         local_addr: &str,
         timeout: Duration,
         username: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Use provided timeout or default
         let cur_username = username.clone();
 
         // 1. Create client socket
@@ -114,7 +149,16 @@ impl Game {
         })
     }
 
-    /// Send a chat message via the networking thread
+    /// Sends a chat message to the server via the networking thread.
+    ///
+    /// # Arguments
+    ///
+    /// * `text` - The message text to send
+    /// * `username` - The username to attach to the message
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if sent successfully, error if channel is closed.
     pub fn send_chat_msg(
         &mut self,
         text: &str,
@@ -131,6 +175,14 @@ impl Game {
         Ok(())
     }
 
+    /// Sends a game start request to the server (host only).
+    ///
+    /// Only the host can start the game. This sends a reliable message
+    /// requesting the server to transition from lobby to game state.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if sent (or if not host), error if channel is closed.
     pub fn send_game_start(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if self.is_host {
             let seq = self.net_handle.next_sequence();
@@ -147,6 +199,16 @@ impl Game {
         Ok(())
     }
 
+    /// Polls for network events and updates game state.
+    ///
+    /// Processes incoming network messages, updates local game state (players,
+    /// bullets), and generates UI updates. Should be called each frame.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of:
+    /// - `Vec<ComponentUpdate>`: UI component updates to apply
+    /// - `Vec<ViewAction>`: View actions (e.g., view changes)
     pub fn poll(&mut self) -> (Vec<ComponentUpdate>, Vec<ViewAction>) {
         let mut ui_updates: Vec<ComponentUpdate> = Vec::new();
         let mut view_actions: Vec<ViewAction> = Vec::new();
@@ -157,7 +219,7 @@ impl Game {
                 (GameState::Lobby, GameNetEvent::Chat(msg)) => {
                     if let Ok(chat) = msg.decode_chat_message() {
                         ui_updates.push(ComponentUpdate::AppendText(
-                            "lobby_chat_log".into(),
+                            components::LOBBY_CHAT_LOG.into(),
                             format!("{}: {}\n", chat.username, chat.text),
                         ));
                     }
@@ -170,7 +232,7 @@ impl Game {
                 (GameState::Lobby, GameNetEvent::GameStart) => {
                     self.state = GameState::InGame;
                     ui_updates.push(ComponentUpdate::AppendText(
-                        "lobby_chat_log".into(),
+                        components::LOBBY_CHAT_LOG.into(),
                         format!("Game starting"),
                     ));
                     view_actions.push(ViewAction::StartGame);
@@ -218,7 +280,7 @@ impl Game {
 
             // Add system chat message
             let msg = format!("{} joined the lobby.", username);
-            updates.push(ComponentUpdate::AppendText("lobby_chat_log".into(), msg));
+            updates.push(ComponentUpdate::AppendText(components::LOBBY_CHAT_LOG.into(), msg));
         }
 
         // --- Players who left ---
@@ -227,13 +289,13 @@ impl Game {
 
             // Add system chat message
             let msg = format!("{} left the lobby.", username);
-            updates.push(ComponentUpdate::AppendText("lobby_chat_log".into(), msg));
+            updates.push(ComponentUpdate::AppendText(components::LOBBY_CHAT_LOG.into(), msg));
         }
 
         // --- Update the user list UI ---
         let usernames_vec: Vec<String> = self.players.keys().cloned().collect();
         updates.push(ComponentUpdate::SetTextVec(
-            "lobby_user_list".into(),
+            components::LOBBY_USER_LIST.into(),
             usernames_vec,
         ));
 
@@ -267,7 +329,7 @@ impl Game {
         let local_client = self.players.get(&self.player_name).unwrap();
         vec![
             ComponentUpdate::SetMiniMapPlayer(
-                "game_mini_map".to_string(),
+                components::GAME_MINI_MAP.to_string(),
                 local_client.pos.to_tuple(),
             )
         ]
@@ -286,14 +348,14 @@ impl Game {
             .collect();
 
         updates.push(ComponentUpdate::SetTextVec(
-            "game_leaderboard".into(),
+            components::GAME_LEADERBOARD.into(),
             leaderboard_lines,
         ));
 
         // --- Update current player's score label ---
         if let Some(local_client) = self.players.get(&self.player_name) {
             updates.push(ComponentUpdate::SetText(
-                "game_score_label".into(),
+                components::GAME_SCORE_LABEL.into(),
                 format!("{} : {}", self.player_name, local_client.score),
             ));
         }
@@ -330,7 +392,7 @@ impl Game {
 
         // Push combined update (assuming SetGameRender can take bullets now)
         updates.push(ComponentUpdate::SetGameRender(
-            "game_render".to_string(),
+            components::GAME_RENDER.to_string(),
             players_map,
             bullets_list, // Add bullets to the message
         ));
@@ -338,7 +400,7 @@ impl Game {
         // --- camera ---
         if let Some(client) = self.players.get(&self.player_name) {
             updates.push(ComponentUpdate::SetGameRenderCamera(
-                "game_render".to_string(),
+                components::GAME_RENDER.to_string(),
                 (
                     client.id.clone(),
                     client.pos.x,
