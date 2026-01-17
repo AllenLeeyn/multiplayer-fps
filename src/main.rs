@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ui_context.load_texture("ceil", "src/assets/image/ceil.png").expect("Failed to load floor texture");
     ui_context.load_texture("wall", "src/assets/image/wall.png").expect("Failed to load wall texture");
     ui_context.load_texture("tile", "src/assets/image/tile.png").expect("Failed to load tile texture");
-    ui_context.load_texture("tile_big", "src/assets/image/digi_grid.png").expect("Failed to load tile_big texture");
+    ui_context.load_texture("tile_big", "src/assets/image/tile_big.png").expect("Failed to load tile_big texture");
     ui_context.load_texture("eye", "src/assets/image/eye.png").expect("Failed to load eye texture");
 
     let mut ui_manager = UIManager::new(ui_context);

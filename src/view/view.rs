@@ -33,6 +33,9 @@ pub enum ViewAction {
     /// Save a maze with the given name and editor ID.
     SaveMaze(String, String),
     
+    /// Save a server address with the given alias.
+    SaveServer(String, String), // (address, alias)
+    
     /// Request to host a game with the specified settings.
     HostGame {
         /// Name of the game session.

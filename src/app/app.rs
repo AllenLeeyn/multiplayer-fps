@@ -139,6 +139,10 @@ impl App {
                 self.save_maze(maze_name, maze_id);
             }
 
+            ViewAction::SaveServer(address, alias) => {
+                self.save_server(address, alias);
+            }
+
             ViewAction::HostGame {
                 game_name,
                 maze,
@@ -237,6 +241,53 @@ impl App {
         } else {
             eprintln!("MazeEditor component not found");
         }
+    }
+
+    fn save_server(&mut self, address: String, alias: String) {
+        // Validate inputs
+        if address.trim().is_empty() {
+            self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                "join_error_label".into(),
+                "Error: Address cannot be empty".to_string(),
+            )]);
+            return;
+        }
+
+        let alias = if alias.trim().is_empty() {
+            address.clone() // Use address as alias if no alias provided
+        } else {
+            alias.trim().to_string()
+        };
+
+        // Save server to config
+        self.config.saved_servers.insert(alias.clone(), address.clone());
+
+        // Save config to disk
+        self.config.save(&self.config_path);
+
+        // Refresh saved server buttons
+        let mut updates = vec![ComponentUpdate::SetText(
+            "join_error_label".into(),
+            format!("Server '{}' saved successfully", alias),
+        )];
+        
+        // Update saved server buttons (up to 5)
+        let servers_vec: Vec<(&String, &String)> = self.config.saved_servers.iter().take(5).collect();
+        for (index, (alias, _address)) in servers_vec.iter().enumerate() {
+            let button_id = format!("saved_server_{}", index);
+            let button_text = format!("📌 {}", alias);
+            updates.push(ComponentUpdate::SetText(button_id, button_text));
+        }
+        
+        // Hide unused buttons
+        for index in servers_vec.len()..5 {
+            let button_id = format!("saved_server_{}", index);
+            updates.push(ComponentUpdate::SetText(button_id, String::new()));
+        }
+        
+        self.manager.apply_updates(updates);
+
+        println!("Server '{}' ({}) saved successfully", alias, address);
     }
 
     pub fn validate_game_settings(

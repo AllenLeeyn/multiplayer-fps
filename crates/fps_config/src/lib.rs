@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::collections::HashMap;
 
 use fps_levels::maze::Maze;
 
@@ -7,6 +8,8 @@ use fps_levels::maze::Maze;
 pub struct Config {
     pub username: String,
     pub maze: Option<Maze>,
+    /// Saved server addresses (alias -> address)
+    pub saved_servers: HashMap<String, String>,
 }
 
 impl Config {
@@ -40,6 +43,7 @@ impl Default for Config {
         Self {
             username: "set username here".to_string(),
             maze: None,
+            saved_servers: HashMap::new(),
         }
     }
 }

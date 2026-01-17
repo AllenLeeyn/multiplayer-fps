@@ -455,7 +455,7 @@ impl Game {
             // At 30Hz server rate, we want to interpolate over 1 client frame
             // Assuming client runs at 60Hz, that's 2 frames, so increment by 0.5 per frame
             // For simplicity, we'll interpolate over 1 frame (increment by 1.0)
-            self.interpolation_alpha = (self.interpolation_alpha + 1.0).min(1.0);
+            self.interpolation_alpha = (self.interpolation_alpha + 0.5).min(1.0);
             
             // Create interpolated snapshot
             let interpolated = self.interpolate_snapshots(prev, current, self.interpolation_alpha);
