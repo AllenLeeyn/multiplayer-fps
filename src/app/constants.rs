@@ -105,4 +105,10 @@ pub mod client {
     
     /// Interval between ping messages to the server (seconds).
     pub const PING_INTERVAL_SECONDS: u64 = 1;
+    
+    /// Client input send rate duration (~30 Hz to match server tick rate).
+    pub const INPUT_SEND_INTERVAL_MS: u64 = 33;
+    
+    /// Client input send interval as a `Duration` type.
+    pub const INPUT_SEND_INTERVAL: Duration = Duration::from_millis(INPUT_SEND_INTERVAL_MS);
 }

@@ -127,6 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         server: None,
         game: None,
         game_input: GameInputState::default(),
+        last_input_send: None,
     };
 
     app.register_view(Box::new(main_menu_view));

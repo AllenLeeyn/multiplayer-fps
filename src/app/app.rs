@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use fps_levels::config::MazeSize;
 use winit::application::ApplicationHandler;
@@ -49,7 +50,10 @@ pub struct App {
 
     pub server: Option<ServerHandle>,
     pub game: Option<Game>,
-    pub game_input: GameInputState
+    pub game_input: GameInputState,
+    
+    /// Last time input was sent to the server.
+    pub last_input_send: Option<Instant>,
 }
 
 impl App {
@@ -595,8 +599,18 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Some(game) = self.game.as_mut() 
                     && game.state == GameState::InGame {
-                    let payload = self.game_input.snapshot(); // This clears the dx
-                    let _ = game.send_game_input(payload);
+                        
+                    // Check if enough time has passed since last input send (30Hz throttle)
+                    let should_send = match self.last_input_send {
+                        Some(last) => last.elapsed() >= client::INPUT_SEND_INTERVAL,
+                        None => true, // Send immediately on first frame
+                    };
+                    
+                    if should_send {
+                        let payload = self.game_input.snapshot(); // This clears the dx
+                        let _ = game.send_game_input(payload);
+                        self.last_input_send = Some(Instant::now());
+                    }
                 }
 
                 self.manager.update_components();
