@@ -4,6 +4,26 @@
 //! maintenance and adjustment. All game balance and configuration values should
 //! be defined here rather than scattered throughout the codebase.
 
+/// Game tick rate configuration.
+///
+/// Controls both server tick rate and client input send rate.
+/// Change this value to adjust game update frequency (affects responsiveness vs bandwidth).
+pub mod tick_rate {
+    /// Server and client tick rate in Hz (updates per second).
+    /// 
+    /// Common values:
+    /// - 20 Hz: Lower bandwidth, less responsive (50ms between ticks)
+    /// - 30 Hz: Balanced (33ms between ticks) 
+    /// - 60 Hz: High responsiveness, more bandwidth (16ms between ticks)
+    pub const TICK_RATE_HZ: u32 = 20;
+    
+    /// Tick duration in milliseconds (derived from tick rate).
+    pub const TICK_DURATION_MS: u64 = (1000 / TICK_RATE_HZ) as u64;
+    
+    /// Tick duration in seconds (for floating-point calculations).
+    pub const TICK_DURATION_SECONDS: f32 = 1.0 / (TICK_RATE_HZ as f32);
+}
+
 /// Game physics and world constants.
 ///
 /// Defines sizes and dimensions for game entities in world units.
@@ -77,12 +97,13 @@ pub mod scoring {
 /// Defines server networking and tick rate settings.
 pub mod server {
     use std::time::Duration;
+    use super::tick_rate;
 
     /// Default bind address for the game server.
     pub const DEFAULT_BIND_ADDR: &str = "0.0.0.0:9000";
     
-    /// Server tick duration in milliseconds (~30 FPS).
-    pub const TICK_DURATION_MS: u64 = 33;
+    /// Server tick duration in milliseconds (derived from tick rate).
+    pub const TICK_DURATION_MS: u64 = tick_rate::TICK_DURATION_MS;
     
     /// Server tick duration as a `Duration` type.
     pub const TICK_DURATION: Duration = Duration::from_millis(TICK_DURATION_MS);
@@ -96,6 +117,7 @@ pub mod server {
 /// Defines client networking and connection settings.
 pub mod client {
     use std::time::Duration;
+    use super::tick_rate;
 
     /// Connection timeout when connecting to a server.
     pub const CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
@@ -106,16 +128,12 @@ pub mod client {
     /// Interval between ping messages to the server (seconds).
     pub const PING_INTERVAL_SECONDS: u64 = 1;
     
-    /// Client input send rate duration (~30 Hz to match server tick rate).
-    pub const INPUT_SEND_INTERVAL_MS: u64 = 33;
+    /// Client input send rate duration (matches server tick rate).
+    pub const INPUT_SEND_INTERVAL_MS: u64 = tick_rate::TICK_DURATION_MS;
     
     /// Client input send interval as a `Duration` type.
     pub const INPUT_SEND_INTERVAL: Duration = Duration::from_millis(INPUT_SEND_INTERVAL_MS);
     
-    /// Jitter buffer delay in seconds for snapshot interpolation.
-    /// Buffers late packets to smooth out network jitter (especially on mobile hotspots).
-    pub const INTERPOLATION_JITTER_BUFFER_SECONDS: f32 = 0.05; // 50ms
-    
     /// Server snapshot interval in seconds (matches server tick rate).
-    pub const SNAPSHOT_INTERVAL_SECONDS: f32 = 0.033; // ~33ms at 30Hz
+    pub const SNAPSHOT_INTERVAL_SECONDS: f32 = tick_rate::TICK_DURATION_SECONDS;
 }

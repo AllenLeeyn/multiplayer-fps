@@ -292,7 +292,7 @@ impl GameServer {
                 }
             }
 
-            // Sleep to maintain 30 Hz tick
+            // Sleep to maintain tick rate
             last_time = Instant::now();
             let elapsed = last_time.elapsed();
             if elapsed < tick_duration {

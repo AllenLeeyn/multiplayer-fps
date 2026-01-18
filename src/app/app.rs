@@ -600,7 +600,7 @@ impl ApplicationHandler for App {
                 if let Some(game) = self.game.as_mut() 
                     && game.state == GameState::InGame {
                         
-                    // Check if enough time has passed since last input send (30Hz throttle)
+                    // Check if enough time has passed since last input send (throttled to tick rate)
                     let should_send = match self.last_input_send {
                         Some(last) => last.elapsed() >= client::INPUT_SEND_INTERVAL,
                         None => true, // Send immediately on first frame
