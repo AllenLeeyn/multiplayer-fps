@@ -111,4 +111,11 @@ pub mod client {
     
     /// Client input send interval as a `Duration` type.
     pub const INPUT_SEND_INTERVAL: Duration = Duration::from_millis(INPUT_SEND_INTERVAL_MS);
+    
+    /// Jitter buffer delay in seconds for snapshot interpolation.
+    /// Buffers late packets to smooth out network jitter (especially on mobile hotspots).
+    pub const INTERPOLATION_JITTER_BUFFER_SECONDS: f32 = 0.05; // 50ms
+    
+    /// Server snapshot interval in seconds (matches server tick rate).
+    pub const SNAPSHOT_INTERVAL_SECONDS: f32 = 0.033; // ~33ms at 30Hz
 }

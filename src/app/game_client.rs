@@ -52,9 +52,9 @@ pub struct Game {
     
     // --- interpolation state ---
     /// Previous snapshot state for interpolation (positions before current)
-    prev_snapshot: Option<GameSnapShotPayload>,
+    prev_snapshot: GameSnapShotPayload,
     /// Current snapshot state (latest received)
-    current_snapshot: Option<GameSnapShotPayload>,
+    current_snapshot: GameSnapShotPayload,
     /// Interpolation progress (0.0 = prev, 1.0 = current)
     interpolation_alpha: f32,
     /// Time when current snapshot was received
@@ -158,8 +158,8 @@ impl Game {
             state,
             is_host: cur_username == game_info.host_username,
             net_handle,
-            prev_snapshot: None,
-            current_snapshot: None,
+            prev_snapshot: GameSnapShotPayload::default(),
+            current_snapshot: GameSnapShotPayload::default(),
             interpolation_alpha: 1.0,
             snapshot_time: Instant::now(),
         })
@@ -263,12 +263,10 @@ impl Game {
                         self.last_seq = msg.header.sequence;
                         if let Ok(payload) = msg.decode_game_snapshot() {
                             // Move current to previous, new snapshot becomes current
-                            if let Some(current) = self.current_snapshot.take() {
-                                self.prev_snapshot = Some(current);
-                            }
-                            self.current_snapshot = Some(payload);
+                            self.prev_snapshot = std::mem::take(&mut self.current_snapshot);
+                            self.current_snapshot = payload;
                             self.snapshot_time = Instant::now();
-                            self.interpolation_alpha = 0.0; // Start interpolation from beginning
+                            // Note: interpolation_alpha will be recalculated from time in update_interpolation()
                         }
                     }
                 }
@@ -447,22 +445,40 @@ impl Game {
         updates
     }
 
-    /// Updates interpolation and applies interpolated snapshot
+    /// Updates interpolation and applies interpolated snapshot using time-based calculation.
+    ///
+    /// Uses elapsed time since the current snapshot was received to calculate interpolation
+    /// alpha, making it independent of frame rate. Includes a jitter buffer to smooth out
+    /// network packet arrival timing, especially important for high-latency connections.
     fn update_interpolation(&mut self) {
-        // If we have both previous and current snapshots, interpolate
-        if let (Some(prev), Some(current)) = (&self.prev_snapshot, &self.current_snapshot) {
-            // Advance interpolation (1 frame = 1.0, so increment by 1.0 each frame)
-            // At 30Hz server rate, we want to interpolate over 1 client frame
-            // Assuming client runs at 60Hz, that's 2 frames, so increment by 0.5 per frame
-            // For simplicity, we'll interpolate over 1 frame (increment by 1.0)
-            self.interpolation_alpha = (self.interpolation_alpha + 0.5).min(1.0);
+        use super::constants::client;
+        
+        // If we have both previous and current snapshots (prev not empty), interpolate
+        if !self.prev_snapshot.players.is_empty() {
+            // Calculate alpha based on actual elapsed time, not frame count
+            let elapsed = self.snapshot_time.elapsed().as_secs_f32();
+            let jitter_buffer = client::INTERPOLATION_JITTER_BUFFER_SECONDS;
+            let snapshot_interval = client::SNAPSHOT_INTERVAL_SECONDS;
+            
+            // Calculate interpolation alpha: 0.0 at start of buffer, 1.0 after full interval
+            // The jitter buffer delays interpolation start to absorb late packets
+            let alpha = if elapsed < jitter_buffer {
+                // Wait for jitter buffer before starting interpolation
+                0.0
+            } else {
+                // Interpolate from 0.0 to 1.0 over the snapshot interval
+                ((elapsed - jitter_buffer) / snapshot_interval).clamp(0.0, 1.0)
+            };
+            
+            // Store calculated alpha for potential future use
+            self.interpolation_alpha = alpha;
             
             // Create interpolated snapshot
-            let interpolated = self.interpolate_snapshots(prev, current, self.interpolation_alpha);
+            let interpolated = self.interpolate_snapshots(&self.prev_snapshot, &self.current_snapshot, alpha);
             self.apply_snapshot(interpolated);
-        } else if let Some(current) = &self.current_snapshot {
-            // Only current snapshot available, apply directly
-            self.apply_snapshot(current.clone());
+        } else {
+            // Only current snapshot available (prev is empty), apply directly
+            self.apply_snapshot(self.current_snapshot.clone());
         }
     }
     

@@ -76,7 +76,7 @@ pub struct BulletSnapshot {
     pub pos: (f32, f32, f32), // x, y, angle (angle helps with drawing tracers)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GameSnapShotPayload {
     pub players: HashMap<String, PlayerSnapshot>, // (id, info)
     pub bullets: Vec<BulletSnapshot>,
