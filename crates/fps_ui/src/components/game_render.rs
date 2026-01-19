@@ -22,7 +22,7 @@ const FOV: f32 = 110.0 * (std::f32::consts::PI / 180.0);
 const BOX_SIZE: f32 = 100.0;
 
 /// Size of player sprites in world units.
-const PLAYER_SIZE: f32 = 30.0;
+const PLAYER_SIZE: f32 = 50.0;
 
 /// Camera offset distance behind the player (in world units).
 /// This moves the camera back slightly to improve visibility and feel.

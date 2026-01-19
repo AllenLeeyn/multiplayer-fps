@@ -32,7 +32,7 @@ pub mod physics {
     pub const BOX_SIZE: f32 = 100.0;
     
     /// Size of player entities in world units.
-    pub const PLAYER_SIZE: f32 = 30.0;
+    pub const PLAYER_SIZE: f32 = 50.0;
     
     /// Size of bullet projectiles in world units.
     pub const BULLET_SIZE: f32 = 5.0;
@@ -43,10 +43,10 @@ pub mod physics {
 /// Defines speeds, movement modifiers, and input sensitivity for players.
 pub mod player {
     /// Base walking speed in world units per second.
-    pub const WALK_SPEED: f32 = 250.0;
+    pub const WALK_SPEED: f32 = 150.0;
     
     /// Running speed (with Shift held) in world units per second.
-    pub const RUN_SPEED: f32 = 350.0;
+    pub const RUN_SPEED: f32 = 250.0;
     
     /// Speed multiplier for sidestepping (A/D keys).
     pub const SIDESTEP_FACTOR: f32 = 0.8;
@@ -58,7 +58,7 @@ pub mod player {
     pub const INVINCIBLE_SPEED_MULTIPLIER: f32 = 1.5;
     
     /// Mouse sensitivity for rotation (applied to mouse delta).
-    pub const ROTATION_SENSITIVITY: f32 = 0.05;
+    pub const ROTATION_SENSITIVITY: f32 = 0.04;
 }
 
 /// Bullet and shooting constants.
