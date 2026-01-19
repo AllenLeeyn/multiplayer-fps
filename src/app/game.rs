@@ -222,24 +222,18 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
         PlayerAction::from_byte(raw) == Some(PlayerAction::Shoot)
     });
     
-    if should_shoot {
-        let now = Instant::now();
-        let cooldown = Duration::from_millis(SHOOT_COOLDOWN_MS);
-        
-        if now.duration_since(client.last_shot_time) >= cooldown {
-            // Spawn bullet in front of player to avoid hitting the player's own hitbox
-            // Offset by player radius + small buffer to ensure bullet starts outside player
-            let spawn_offset = PLAYER_SIZE / 2.0 + BULLET_SIZE / 2.0 + 5.0;
-            let mut bullet_pos = client.pos;
-            bullet_pos.move_forward(spawn_offset);
+        if should_shoot {
+            let now = Instant::now();
+            let cooldown = Duration::from_millis(SHOOT_COOLDOWN_MS);
             
-            bullets.push(Bullet {
-                owner_id: client.id.clone(),
-                pos: bullet_pos,
-            });
-            client.last_shot_time = now;
+            if now.duration_since(client.last_shot_time) >= cooldown {
+                bullets.push(Bullet {
+                    owner_id: client.id.clone(),
+                    pos: client.pos,
+                });
+                client.last_shot_time = now;
+            }
         }
-    }
 }
 
 /// Gets the base player movement speed.
