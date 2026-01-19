@@ -11,7 +11,7 @@ use crate::app::{
     constants::{
         physics::{BOX_SIZE, PLAYER_SIZE, BULLET_SIZE},
         player::{WALK_SPEED, RUN_SPEED, SIDESTEP_FACTOR, BACKSTEP_FACTOR, INVINCIBLE_SPEED_MULTIPLIER},
-        bullet::{SPEED as BULLET_SPEED, SHOOT_COOLDOWN_MS, INVINCIBILITY_DURATION_SECONDS},
+        bullet::{SPEED as BULLET_SPEED, SHOOT_COOLDOWN_MS, INVINCIBILITY_DURATION_SECONDS, SUBSTEPS as BULLET_SUBSTEPS},
         scoring::{HIT_PENALTY, HIT_REWARD},
     },
     PlayerAction
@@ -96,10 +96,9 @@ fn update_invincibility(client: &mut Client, dt: f32) {
     }
 }
 
-/// Handles player movement and shooting based on input actions.
+/// Handles player movement based on input actions.
 ///
-/// Processes player actions (movement, shooting) and applies them to the
-/// client's position and bullet list. Respects cooldown for shooting.
+/// Processes movement actions and applies them to the client's position.
 ///
 /// # Arguments
 ///
@@ -107,13 +106,11 @@ fn update_invincibility(client: &mut Client, dt: f32) {
 /// * `actions` - Set of active player actions (serialized as bytes)
 /// * `_is_running` - Whether the player is running (currently unused but kept for future use)
 /// * `move_step` - Distance to move this frame
-/// * `bullets` - List of bullets to potentially add new shots to
 fn handle_player_movement(
     client: &mut Client,
     actions: &std::collections::HashSet<u8>,
     _is_running: bool,
     move_step: f32,
-    bullets: &mut Vec<Bullet>,
 ) {
     for raw in actions {
         let Some(action) = PlayerAction::from_byte(*raw) else {
@@ -129,18 +126,6 @@ fn handle_player_movement(
                 client.pos.strafe(move_step * SIDESTEP_FACTOR),
             PlayerAction::MoveLeft => 
                 client.pos.strafe(-move_step * SIDESTEP_FACTOR),
-            PlayerAction::Shoot => {
-                let now = Instant::now();
-                let cooldown = Duration::from_millis(SHOOT_COOLDOWN_MS);
-
-                if now.duration_since(client.last_shot_time) >= cooldown {
-                    bullets.push(Bullet {
-                        owner_id: client.id.clone(),
-                        pos: client.pos,
-                    });
-                    client.last_shot_time = now;
-                }
-            }
             _ => {}
         }
     }
@@ -225,8 +210,36 @@ pub fn update_player(client: &mut Client, maze: &Maze, bullets: &mut Vec<Bullet>
 
     let (orig_x, orig_y, _) = client.pos.to_tuple();
 
-    handle_player_movement(client, &actions, is_running, move_step, bullets);
+    // Handle movement first
+    handle_player_movement(client, &actions, is_running, move_step);
+    
+    // Resolve collisions (may revert position if hitting a wall)
     resolve_collisions(client, maze, orig_x, orig_y);
+    
+    // Handle shooting AFTER collision resolution so bullets spawn from correct final position
+    // Check if shoot action is present and update last_shot_time
+    let should_shoot = actions.iter().any(|&raw| {
+        PlayerAction::from_byte(raw) == Some(PlayerAction::Shoot)
+    });
+    
+    if should_shoot {
+        let now = Instant::now();
+        let cooldown = Duration::from_millis(SHOOT_COOLDOWN_MS);
+        
+        if now.duration_since(client.last_shot_time) >= cooldown {
+            // Spawn bullet in front of player to avoid hitting the player's own hitbox
+            // Offset by player radius + small buffer to ensure bullet starts outside player
+            let spawn_offset = PLAYER_SIZE / 2.0 + BULLET_SIZE / 2.0 + 5.0;
+            let mut bullet_pos = client.pos;
+            bullet_pos.move_forward(spawn_offset);
+            
+            bullets.push(Bullet {
+                owner_id: client.id.clone(),
+                pos: bullet_pos,
+            });
+            client.last_shot_time = now;
+        }
+    }
 }
 
 /// Gets the base player movement speed.
@@ -249,8 +262,9 @@ fn player_speed(is_running: bool) -> f32 {
 
 /// Updates a bullet's position and checks for collisions.
 ///
-/// Moves the bullet forward, checks for wall and player collisions, and returns
-/// the bullet's new status. Used each server tick for all active bullets.
+/// Moves the bullet forward using substeps for accuracy at lower tick rates,
+/// checks for wall and player collisions, and returns the bullet's new status.
+/// Used each server tick for all active bullets.
 ///
 /// # Arguments
 ///
@@ -266,46 +280,54 @@ fn player_speed(is_running: bool) -> f32 {
 /// - `HitWall` if the bullet hit a wall
 /// - `HitPlayer(id)` if the bullet hit a player (returns player ID)
 pub fn update_bullet(bullet: &mut Bullet, maze: &Maze, clients: &mut ClientList, dt: f32) -> BulletStatus {
-    // 1. Move the bullet forward
-    bullet.pos.move_forward(BULLET_SPEED * dt);
+    // Calculate substeps: number of physics steps = substeps + 1
+    // 0 substeps (60Hz) = 1 step, 2 substeps (20Hz) = 3 steps
+    let num_steps = BULLET_SUBSTEPS + 1;
+    let substep_dt = dt / (num_steps as f32);
     
     let bullet_radius = BULLET_SIZE / 2.0;
     let player_radius = PLAYER_SIZE / 2.0;
     let hit_radius_sq = (player_radius + bullet_radius).powi(2);
 
-    // 2. Wall Collision Check (Immediate return as walls are static)
-    if !maze.is_walkable(bullet.pos.x, bullet.pos.y, BOX_SIZE) {
-        return BulletStatus::HitWall;
-    }
-
-    // 3. Player Collision Check (Find closest)
-    let mut closest_hit: Option<(String, f32)> = None;
-
-    for client in clients.iter() {
-        if client.id == bullet.owner_id { continue; }
+    // Perform movement and collision checks in substeps
+    for _step in 0..num_steps {
+        // 1. Move the bullet forward by substep_dt
+        bullet.pos.move_forward(BULLET_SPEED * substep_dt);
         
-        // Skip invincible players entirely
-        if client.is_invincible() { continue; }
+        // 2. Wall Collision Check (Immediate return as walls are static)
+        if !maze.is_walkable(bullet.pos.x, bullet.pos.y, BOX_SIZE) {
+            return BulletStatus::HitWall;
+        }
 
-        let dx = client.pos.x - bullet.pos.x;
-        let dy = client.pos.y - bullet.pos.y;
-        let dist_sq = dx * dx + dy * dy;
+        // 3. Player Collision Check (Find closest)
+        let mut closest_hit: Option<(String, f32)> = None;
 
-        if dist_sq < hit_radius_sq {
-            // If we haven't hit anyone yet, or this player is closer than the previous find
-            match closest_hit {
-                None => closest_hit = Some((client.id.clone(), dist_sq)),
-                Some((_, best_dist_sq)) if dist_sq < best_dist_sq => {
-                    closest_hit = Some((client.id.clone(), dist_sq));
+        for client in clients.iter() {
+            if client.id == bullet.owner_id { continue; }
+            
+            // Skip invincible players entirely
+            if client.is_invincible() { continue; }
+
+            let dx = client.pos.x - bullet.pos.x;
+            let dy = client.pos.y - bullet.pos.y;
+            let dist_sq = dx * dx + dy * dy;
+
+            if dist_sq < hit_radius_sq {
+                // If we haven't hit anyone yet, or this player is closer than the previous find
+                match closest_hit {
+                    None => closest_hit = Some((client.id.clone(), dist_sq)),
+                    Some((_, best_dist_sq)) if dist_sq < best_dist_sq => {
+                        closest_hit = Some((client.id.clone(), dist_sq));
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
-    }
 
-    // If we found any hits, return the closest one
-    if let Some((id, _)) = closest_hit {
-        return BulletStatus::HitPlayer(id);
+        // If we found any hits, return the closest one immediately
+        if let Some((id, _)) = closest_hit {
+            return BulletStatus::HitPlayer(id);
+        }
     }
 
     BulletStatus::Active

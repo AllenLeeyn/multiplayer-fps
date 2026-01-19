@@ -15,7 +15,7 @@ pub mod tick_rate {
     /// - 20 Hz: Lower bandwidth, less responsive (50ms between ticks)
     /// - 30 Hz: Balanced (33ms between ticks) 
     /// - 60 Hz: High responsiveness, more bandwidth (16ms between ticks)
-    pub const TICK_RATE_HZ: u32 = 20;
+    pub const TICK_RATE_HZ: u32 = 30;
     
     /// Tick duration in milliseconds (derived from tick rate).
     pub const TICK_DURATION_MS: u64 = (1000 / TICK_RATE_HZ) as u64;
@@ -65,6 +65,8 @@ pub mod player {
 ///
 /// Defines bullet physics and shooting mechanics.
 pub mod bullet {
+    use super::tick_rate;
+    
     /// Bullet movement speed in world units per second.
     pub const SPEED: f32 = 1200.0;
     
@@ -73,6 +75,21 @@ pub mod bullet {
     
     /// Duration of invincibility after being hit, in seconds.
     pub const INVINCIBILITY_DURATION_SECONDS: f32 = 2.0;
+    
+    /// Number of substeps for bullet physics calculation based on tick rate.
+    /// 
+    /// Higher tick rates (smaller dt) need fewer substeps, lower tick rates need more.
+    /// Formula: ((60 - tick_rate) + 19) / 20, clamped to [0, 2]
+    /// - 60Hz: 0 substeps (dt = 16.67ms, small enough for accurate single-step)
+    /// - 30Hz: 2 substeps (dt = 33.33ms, needs subdivision)
+    /// - 20Hz: 2 substeps (dt = 50ms, needs subdivision)
+    pub const SUBSTEPS: u32 = {
+        // Calculate ceiling of (60 - tick_rate) / 20 using integer math
+        // Add 19 before division to round up: (n + 19) / 20 = ceil(n / 20)
+        let calculated = (60u32.saturating_sub(tick_rate::TICK_RATE_HZ) + 19) / 20;
+        // Clamp to [0, 2]
+        if calculated > 2 { 2 } else { calculated }
+    };
 }
 
 /// Game scoring constants.

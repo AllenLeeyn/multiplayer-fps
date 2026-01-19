@@ -357,13 +357,18 @@ impl Game {
     }
 
     fn update_mini_map(&self) -> Vec<ComponentUpdate> {
-        let local_client = self.players.get(&self.player_name).unwrap();
-        vec![
-            ComponentUpdate::SetMiniMapPlayer(
-                components::GAME_MINI_MAP.to_string(),
-                local_client.pos.to_tuple(),
-            )
-        ]
+        // Only update minimap if local player exists in snapshot
+        if let Some(local_client) = self.players.get(&self.player_name) {
+            vec![
+                ComponentUpdate::SetMiniMapPlayer(
+                    components::GAME_MINI_MAP.to_string(),
+                    local_client.pos.to_tuple(),
+                )
+            ]
+        } else {
+            // Player not in snapshot yet (e.g., during initial connection)
+            vec![]
+        }
     }
 
     fn update_leaderboard(&self) -> Vec<ComponentUpdate> {
