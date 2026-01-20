@@ -287,7 +287,8 @@ impl View for ViewLobby {
 - Use 'ESC' key to leave game
 - Use the mouse to look around
 - Use Left Mouse Click to shoot
-- When hit, a player will turn invisible.".into(),
+- Hit a player to gain 10 points.
+- Player hit loses 5 points and turn invisible.".into(),
             ),
             ComponentUpdate::SetText("lobby_chat_input".into(), "".into()),
         ]
