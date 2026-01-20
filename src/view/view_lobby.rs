@@ -279,7 +279,16 @@ impl View for ViewLobby {
                     self.target_score,
                 ),
             ),
-            ComponentUpdate::SetText("lobby_chat_log".into(), "".into()),
+            ComponentUpdate::SetText(
+"lobby_chat_log".into(),
+"Controls:
+- Use 'WASD' keys to move around
+- Use 'SHIFT' key to run
+- Use 'ESC' key to leave game
+- Use the mouse to look around
+- Use Left Mouse Click to shoot
+- When hit, a player will turn invisible.".into(),
+            ),
             ComponentUpdate::SetText("lobby_chat_input".into(), "".into()),
         ]
     }
