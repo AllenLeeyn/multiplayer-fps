@@ -20,10 +20,6 @@ This project develops a real-time, networked multiplayer first-person shooter (F
 *   **Combat Grace Period:** A 2-second grace period before a player can be shot again after being hit.
 *   **Winning Condition:** The game ends when a player reaches a pre-defined winning score.
 *   **Leaderboard:** A dynamic leaderboard displays current player standings.
-*   **Distinct Player Roles:** Two player types, "Spheres" and "Cubes," each with unique abilities that encourage different playstyles and tactical depth.
-    *    Spheres: Possess the ability to shrink and move rapidly, facilitating evasion and strategic hiding.
-    *    Cubes: Can mimic maze walls, allowing them to blend in and ambush opponents.
-
 **Networking and Server Infrastructure:**
 
 *   **Client-Server Model:** Establish a robust client-server architecture.
@@ -102,10 +98,10 @@ Allows players to send and receive text messages in the lobby
 Prompts clients to enter the server's IP address and port
 - **Username Input**:
 Prompts clients to provide a username for identification
-- **Server Connection History (Not implemented)**:
+- **Server Connection History**:
 Saves previously connected server details with user-defined aliases
-- **Simplified Reconnection (Not implemented)**:
-Allows quick reconnection to saved servers
+- **Simplified Reconnection**:
+Allows quick reconnection to saved servers (displays up to 5 saved servers)
 
 ### Game Content & Environment
 - **Multiple Pre-designed Levels**:
@@ -122,8 +118,6 @@ Allows a host to create a new game session on the server
 Host can define game parameters (e.g., winning score, maze difficulty)
 - **Game Start Initiation**:
 Host can initiate the start of a created game
-- **AI Opponent Integration**:
-Computer-controlled players can participate in games
 
 ## Tech Stack
 - Tech stack
@@ -301,9 +295,10 @@ multiplayer-fps/
 #### User Interface
 - ✅ Main menu view
 - ✅ Host game view
-- ✅ Join game view
+- ✅ Join game view with saved server history
 - ✅ Level selection view
 - ✅ Lobby view with chat
+- ✅ Server connection history with aliases
 - ✅ In-game HUD with:
     - ✅ 3D raycasted game view
     - ✅ Mini-map with player position
@@ -318,6 +313,8 @@ multiplayer-fps/
 - ✅ Maze rendering (walls, floor, ceiling)
 - ✅ Collision detection
 - ✅ Player positioning and movement
+- ✅ Custom maze editor
+- ✅ Save/load custom mazes
 
 #### Code Quality
 - ✅ Centralized constants module
@@ -327,17 +324,6 @@ multiplayer-fps/
 - ✅ Component-based UI architecture
 
 ### 🚧 In Progress / Planned
-
-#### Game Features
-- [ ] Player roles (Spheres and Cubes with unique abilities)
-- [ ] AI opponents
-- [ ] Multiple pre-designed levels
-- [ ] Server connection history with aliases
-
-#### UI Enhancements
-- [ ] Enhanced level editor features
-- [ ] Settings menu
-- [ ] Pause menu
 
 #### Audio
 - [ ] Sound effects
