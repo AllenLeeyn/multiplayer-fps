@@ -1,5 +1,5 @@
 {
-  "username": "Leee",
+  "username": "Batman",
   "maze": {
     "name": "OPEN WARS",
     "width": 9,
@@ -94,7 +94,7 @@
     }
   },
   "saved_servers": {
-    "Mobile": "10.61.159.225:9000",
-    "Home": "192.168.1.137:9000"
+    "Home": "192.168.1.137:9000",
+    "Mobile": "10.61.159.225:9000"
   }
 }

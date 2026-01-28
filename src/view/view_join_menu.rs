@@ -95,7 +95,7 @@ impl View for ViewJoinMenu {
                 sizing: LengthMode::Px,
             },
             "Enter server address".to_string(),
-            18,
+            20,
             24.0,
             Color::WHITE,
             Color::DARK_GRAY,
