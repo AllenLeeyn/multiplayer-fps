@@ -201,7 +201,14 @@ impl GameNet {
 
             // Resend reliable packets
             self.socket.resend_pending();
-            
+
+            // Detect server gone via ping timeout (e.g. host left); remote clients don't get recv() errors.
+            let timed_out = self.socket.check_ping_timeouts();
+            if !timed_out.is_empty() {
+                let _ = self.evt_tx.send(GameNetEvent::Disconnected);
+                return;
+            }
+
             std::thread::sleep(Duration::from_millis(client::NET_THREAD_SLEEP_MS));
         }
     }
