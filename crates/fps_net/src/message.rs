@@ -12,9 +12,10 @@ use std::error::Error;
 use super::{MessageHeader, MessageType, now_ms};
 use fps_levels::maze::Maze;
 
-/// Serializes any payload of type T into a byte vector.
+/// Serializes any payload of type T into a byte vector using binary encoding.
 ///
-/// Uses bincode with standard configuration for efficient binary serialization.
+/// Uses bincode with standard configuration for efficient binary serialization
+/// (not manual bit packing).
 ///
 /// # Arguments
 ///
@@ -44,9 +45,8 @@ pub struct GameInfoPayload {
 
 /// Generic network message with header and optional payload.
 ///
-/// All network communication uses this message type. The header contains metadata
-/// (message type, sequence number, timestamp), while the payload contains the
-/// actual message data (if any).
+/// All network communication uses this message type, which is serialized
+/// into a compact binary format using bincode.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Message {
     pub header: MessageHeader,

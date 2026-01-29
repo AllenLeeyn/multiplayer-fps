@@ -94,25 +94,23 @@ pub struct Message {
 - **`header`**: Always present; carries `msg_type`, `sequence`, `timestamp_ms`.
 - **`payload`**: Optional **opaque bytes**. For message types that carry data, the payload is the bincode-encoded bytes of a specific Rust type (e.g. `JoinGamePayload`, `GameSnapShotPayload`).
 
-### Why compact binary encoding matters (and the crate we use)
+### Why binary encoding matters (and the crate we use)
 
 Multiplayer games send many small messages (inputs, snapshots, chat) at high frequency. Keeping each message **as small as possible** is important:
 
 - **Bandwidth**: Smaller packets use less network capacity. That matters on crowded Wi‑Fi, mobile, or when many players are in one game.
-- **UDP and MTU**: UDP datagrams are often limited by the network MTU (e.g. 1500 bytes). Compact encoding lets more logical messages fit in one datagram and reduces fragmentation.
+- **UDP and MTU**: UDP datagrams are often limited by the network MTU (e.g. 1500 bytes). Binary encoding lets more logical messages fit in one datagram and reduces fragmentation.
 - **Latency**: Less data to send and receive means less time on the wire and in the kernel, which helps keep latency and jitter low.
 - **Predictability**: Fixed-size or small variable-size binary layouts are easier to reason about than large text payloads when tuning for throughput and packet rate.
 
-**Bit packing** in the broad sense means representing data in a **compact binary form** instead of a verbose text format (e.g. JSON). This crate does not pack individual bits by hand; it uses **compact binary serialization** so that integers, enums, and structs are encoded in a small, well-defined binary format rather than as human-readable text.
+We use the **[bincode](https://docs.rs/bincode)** crate for **binary encoding**. Bincode:
 
-We use the **[bincode](https://docs.rs/bincode)** crate to achieve this. Bincode:
-
-- Serializes Rust types to a **binary** format (not text). For example, a `u32` is 4 bytes; enums and structs have no extra field names or delimiters.
+- Serializes Rust types to a **compact binary** format (not text). For example, a `u32` is 4 bytes; enums and structs have no extra field names or delimiters.
 - Is **compact** compared to JSON or XML: no key names, no whitespace, and efficient representation of numbers and collections.
 - Works with **Serde**: any `Serialize`/`Deserialize` type can be encoded as message payloads with minimal code.
 - Produces a **deterministic** byte stream for the same value, which helps with debugging and optional checksums.
 
-All `Message` encoding and decoding (header and payload bytes) goes through bincode, so every message on the wire is in this compact binary form.
+All `Message` encoding and decoding (header and payload bytes) goes through bincode, so every message on the wire is in this compact binary form. Unlike bit packing (which involves manual bit manipulation), this crate uses standard binary serialization for efficiency and simplicity.
 
 **Encoding/decoding:**
 
