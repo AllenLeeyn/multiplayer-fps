@@ -15,7 +15,6 @@ use crate::maze::{Cell, Maze};
 /// 1. Seeds a starting cell at an even coordinate
 /// 2. Carves corridors using DFS (guaranteeing connectivity)
 /// 3. Adds loops based on difficulty settings
-/// 4. Extracts spawn points from room regions
 ///
 /// # Arguments
 ///
@@ -55,9 +54,6 @@ pub fn generate_maze(config: &MazeConfig, name: String) -> Maze {
 
     // 3. Add loops based on difficulty
     add_loops(&mut maze, config.difficulty, &mut rng);
-
-    // 4. Overlay rooms and extract spawn points
-    extract_spawn_points(&mut maze, &mut rng);
 
     maze
 }
@@ -107,39 +103,3 @@ fn add_loops<R: Rng>(maze: &mut Maze, difficulty: Difficulty, rng: &mut R) {
     }
 }
 
-fn extract_spawn_points<R: Rng>(maze: &mut Maze, rng: &mut R) {
-    let rooms_per_side = maze.width / 3;
-
-    for ry in 0..rooms_per_side {
-        for rx in 0..rooms_per_side {
-            let base_x = rx * 3;
-            let base_y = ry * 3;
-
-            let mut empty_cells = Vec::new();
-
-            for dy in 0..3 {
-                for dx in 0..3 {
-                    let x = base_x + dx;
-                    let y = base_y + dy;
-
-                    if maze.is_empty(x, y) {
-                        empty_cells.push((x, y));
-                    }
-                }
-            }
-
-            if !empty_cells.is_empty() {
-                let idx = rng.random_range(0..empty_cells.len());
-                let (sx, sy) = empty_cells[idx];
-                maze.add_spawn_point(sx, sy);
-            } else {
-                // Deterministic fallback inside the room
-                let cx = base_x + 1;
-                let cy = base_y + 1;
-                if maze.is_empty(cx, cy) {
-                    maze.add_spawn_point(cx, cy);
-                }
-            }
-        }
-    }
-}

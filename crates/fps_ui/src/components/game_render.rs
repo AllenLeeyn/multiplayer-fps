@@ -2,6 +2,76 @@
 //!
 //! A 3D raycasted game world renderer using DDA (Digital Differential Analyzer) raycasting.
 //! Renders walls, floor, ceiling, players, and bullets from a first-person perspective.
+//!
+//! ## Setup
+//!
+//! **Construction:** Create with `GameRender::new(id, bounds)`. The component has no maze or
+//! camera until the app sends updates.
+//!
+//! **Data flow:** The app drives all game state via `ComponentUpdate`:
+//! - `SetMaze(id, maze)` — set the maze (grid of walls) to raycast against.
+//! - `SetGameRender(id, players_map, bullets_list)` — set other players (id → (x, y, angle, is_invincible))
+//!   and bullets ((x, y, angle) list). Called each time the app has a new game snapshot.
+//! - `SetGameRenderCamera(id, (player_id, x, y, angle, is_invincible))` — set the local camera
+//!   (the player whose view we render).
+//!
+//! The app typically pushes these updates every frame or every network tick so the view stays
+//! in sync with the game state.
+//!
+//! ## Input handling
+//!
+//! **This component only handles the Escape key.** When the user presses Escape, it emits
+//! `UIEvent::ButtonClicked(component_id)` so the app can open the pause menu or leave the game.
+//! All other player input (WASD, mouse look, shoot, etc.) is captured in the **app loop**, not
+//! inside `GameRender`. The app updates game state and then sends that state back into
+//! `GameRender` via the `SetGameRender` / `SetGameRenderCamera` updates above.
+//!
+//! ## Draw world (raycasting and perspective)
+//!
+//! **Raycasting:** For each screen column we cast one ray from the camera in the direction
+//! corresponding to that column (using the FOV). `cast_ray_dda` uses a DDA (Digital Differential
+//! Analyzer) step through the maze grid: we step along the ray in fixed increments (one cell
+//! at a time in X or Y) and stop at the first wall. The result is per-column distance and hit
+//! position, plus which side of the cell was hit (X-side or Y-side) for texture and shading.
+//!
+//! **Perspective:** The projection plane is at distance `dist_to_plane` in front of the camera
+//! (derived from screen width and FOV). Wall height on screen is computed as
+//! `wall_height = (BOX_SIZE * dist_to_plane) / corrected_dist`, so farther walls appear
+//! shorter. Fish-eye is reduced by using `corrected_dist = dist * (cos_a*dir_x + sin_a*dir_y)`
+//! (distance along the camera forward direction).
+//!
+//! **Ceiling and floor:** For each pixel column we already have the wall strip (from `draw_start`
+//! to `draw_end`). Above the strip we draw the ceiling, below it the floor. For a given screen
+//! row we compute the 3D ray that would hit that row: `row_dist = (BOX_SIZE * 0.5 * dist_to_plane) / p`
+//! where `p` is the vertical offset from screen center. We then sample the ceiling/floor texture
+//! at the world position `(cam + row_dist * dir)` (tiled by `BOX_SIZE`) so ceiling and floor
+//! use the same perspective and tiling as the world.
+//!
+//! **Walls:** The wall strip is texture-mapped using hit position: `wall_u` from the cell edge
+//! (hy or hx mod BOX_SIZE), `wall_v` from the vertical position within the strip. Shading uses
+//! side (Y-side darker) and distance fade so far walls are dimmer.
+//!
+//! ## Player drawing (circle sprite with cylinder mapping)
+//!
+//! Other players are drawn as **circle sprites** (a disc on screen) with **cylinder mapping** so
+//! the texture wraps horizontally around the “cylinder” of the sprite. World position is
+//! transformed to camera space; we project to screen X using the same FOV formula as walls.
+//! Screen size scales with depth: `sprite_size = (PLAYER_SIZE * dist_to_plane) / transform_y`.
+//! For each pixel in the sprite’s screen rectangle we compute normalized disc coordinates
+//! `(ux, uy)`; if `ux² + uy² ≤ 1` we’re inside the circle. Texture coordinates: horizontally we
+//! use the player’s facing angle plus an offset from `ux` (cylinder wrap); vertically we map
+//! `uy` to `tv`. A simple shading term (distance from center + highlight) is applied so the
+//! circle looks rounded. A soft shadow is drawn below the sprite; both shadow and sprite are
+//! depth-tested against the z-buffer filled by the raycast.
+//!
+//! ## Bullet drawing
+//!
+//! Bullets are drawn as **small filled quads** (no texture). For each bullet we transform to
+//! camera space and skip if behind the camera. We project to screen X with the same FOV math;
+//! we depth-test against the z-buffer and skip if occluded. On-screen size scales with
+//! distance: `sprite_size = (5.0 * dist_to_plane) / transform_y`. We draw a small rectangle
+//! of fixed yellow color centered at the projected position and vertical center; no circle
+//! or cylinder mapping, just a perspective-scaled quad.
 
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
