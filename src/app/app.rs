@@ -161,6 +161,10 @@ impl App {
 
             ViewAction::LeaveLobby => {
                 self.kill_game();
+                self.manager.apply_updates(vec![ComponentUpdate::SetText(
+                    components::RTT_LABEL.into(),
+                    "RTT: --".into(),
+                )]);
                 self.activate_view(views::MAIN_MENU);
             }
 

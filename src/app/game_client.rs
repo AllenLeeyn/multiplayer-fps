@@ -282,6 +282,14 @@ impl Game {
                     view_actions.push(ViewAction::LeaveLobby);
                 }
 
+                (_, GameNetEvent::Rtt(rtt)) => {
+                    let ms = rtt.as_secs_f64() * 1000.0;
+                    ui_updates.push(ComponentUpdate::SetText(
+                        components::RTT_LABEL.into(),
+                        format!("RTT: {:.0}ms", ms),
+                    ));
+                }
+
                 _ => {}
             }
         }

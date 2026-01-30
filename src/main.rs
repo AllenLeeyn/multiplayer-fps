@@ -11,6 +11,7 @@ use fps_ui::{
     Color, UIMainContext,
     components::{
         FpsComponent,
+        Label,
         panel::{Panel, RenderSource},
     },
     geometry::Rect,
@@ -71,12 +72,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         },
     );
 
-    // Red background box for FPS counter (slightly larger with padding)
-    // Positioned at (0, 0) to align with FPS component at (2, 2), with 2px padding
+    let rtt_label = Label::new(
+        "rtt_label".to_string(),
+        "RTT: --".to_string(),
+        16.0,
+        Color::YELLOW,
+        Rect::new(78.0, 2.0, 75.0, 20.0),
+        LayoutMetrics {
+            anchor: AnchorPoint::TopLeft,
+            positioning: LengthMode::Px,
+            sizing: LengthMode::Px,
+        },
+    );
+
+    // Red background box for FPS counter and RTT (slightly larger with padding)
+    // Positioned at (0, 0) to align with FPS at (2, 2) and RTT at (78, 2)
     let fps_background = Panel::new_with_layout(
         "fps_background".to_string(),
         RenderSource::SolidColor(Color::BLACK),
-        Rect::new(0.0, 0.0, 74.0, 16.0),
+        Rect::new(0.0, 0.0, 180.0, 16.0),
         LayoutMetrics {
             anchor: AnchorPoint::TopLeft,
             positioning: LengthMode::Px,
@@ -101,6 +115,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         components: vec![
             Box::new(fps_background),  // Background panel (renders first, behind)
             Box::new(fps_component),   // FPS text (renders on top)
+            Box::new(rtt_label),       // RTT text (beside FPS)
         ],
     };
 

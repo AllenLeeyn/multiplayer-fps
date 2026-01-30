@@ -36,6 +36,9 @@ pub mod components {
     /// FPS counter component identifier.
     #[allow(dead_code)]
     pub const FPS_COUNTER: &str = "fps_counter";
+
+    /// RTT (round-trip time) display label identifier.
+    pub const RTT_LABEL: &str = "rtt_label";
     
     /// Username display label identifier.
     pub const USERNAME_LABEL: &str = "username_label";

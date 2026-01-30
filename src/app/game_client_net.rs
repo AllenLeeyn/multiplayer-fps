@@ -53,6 +53,9 @@ pub enum GameNetEvent {
     
     /// Connection lost or disconnected.
     Disconnected,
+
+    /// Round-trip time from latest pong (ms).
+    Rtt(Duration),
 }
 
 /// Handle for interacting with the client networking thread.
@@ -217,7 +220,9 @@ impl GameNet {
         //println!("handling msg {:?}", msg.header);
         match msg.header.msg_type {
             MessageType::Pong => {
-                let _rtt = self.socket.handle_pong(msg.header.sequence);
+                if let Some(rtt) = self.socket.handle_pong(msg.header.sequence) {
+                    let _ = self.evt_tx.send(GameNetEvent::Rtt(rtt));
+                }
             }
 
             MessageType::ChatMessage => {
